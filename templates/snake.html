@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Snake — Raphi</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0a0a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: 'Courier New', monospace;
+      color: #fff;
+    }
+
+    .back {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      color: #555;
+      text-decoration: none;
+      font-size: 0.8rem;
+      letter-spacing: 0.15em;
+      transition: color 0.15s;
+    }
+    .back:hover { color: #4ade80; }
+
+    h1 {
+      font-size: 2.5rem;
+      letter-spacing: 0.3em;
+      color: #4ade80;
+      text-shadow: 0 0 20px #4ade8088;
+      margin-bottom: 12px;
+    }
+
+    #scoreboard {
+      display: flex;
+      gap: 40px;
+      margin-bottom: 16px;
+      font-size: 1rem;
+      letter-spacing: 0.1em;
+      color: #aaa;
+    }
+
+    #scoreboard span { color: #4ade80; font-size: 1.2rem; font-weight: bold; }
+
+    #game-wrapper {
+      position: relative;
+      border: 2px solid #4ade8044;
+      border-radius: 4px;
+      box-shadow: 0 0 40px #4ade8022;
+    }
+
+    canvas { display: block; }
+
+    #overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.82);
+      border-radius: 4px;
+      gap: 16px;
+    }
+
+    #overlay h2 {
+      font-size: 2rem;
+      color: #4ade80;
+      text-shadow: 0 0 16px #4ade80;
+      letter-spacing: 0.2em;
+    }
+
+    #overlay p { color: #aaa; font-size: 0.95rem; letter-spacing: 0.05em; }
+
+    #overlay button {
+      margin-top: 8px;
+      padding: 12px 36px;
+      background: transparent;
+      border: 2px solid #4ade80;
+      color: #4ade80;
+      font-family: 'Courier New', monospace;
+      font-size: 1rem;
+      letter-spacing: 0.2em;
+      cursor: pointer;
+      border-radius: 2px;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    #overlay button:hover {
+      background: #4ade80;
+      color: #0a0a0a;
+    }
+
+    #controls {
+      margin-top: 16px;
+      color: #555;
+      font-size: 0.8rem;
+      letter-spacing: 0.08em;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <a class="back" href="/">← RAPHI</a>
+
+  <h1>SNAKE</h1>
+
+  <div id="scoreboard">
+    SCORE&nbsp;<span id="score">0</span>
+    &nbsp;&nbsp;MEILLEUR&nbsp;<span id="best">0</span>
+  </div>
+
+  <div id="game-wrapper">
+    <canvas id="canvas"></canvas>
+    <div id="overlay">
+      <h2 id="overlay-title">SNAKE</h2>
+      <p id="overlay-msg">Utilise les flèches ou WASD pour jouer</p>
+      <button id="start-btn">JOUER</button>
+    </div>
+  </div>
+
+  <div id="controls">↑ ↓ ← →&nbsp; ou &nbsp;W A S D</div>
+
+  <script>
+    const COLS = 25;
+    const ROWS = 25;
+    const CELL = 22;
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = COLS * CELL;
+    canvas.height = ROWS * CELL;
+
+    const scoreEl = document.getElementById("score");
+    const bestEl = document.getElementById("best");
+    const overlay = document.getElementById("overlay");
+    const overlayTitle = document.getElementById("overlay-title");
+    const overlayMsg = document.getElementById("overlay-msg");
+    const startBtn = document.getElementById("start-btn");
+
+    let snake, dir, nextDir, food, score, best = 0, running = false, loop;
+
+    function init() {
+      snake = [
+        { x: 12, y: 12 },
+        { x: 11, y: 12 },
+        { x: 10, y: 12 },
+      ];
+      dir = { x: 1, y: 0 };
+      nextDir = { x: 1, y: 0 };
+      score = 0;
+      scoreEl.textContent = 0;
+      placeFood();
+    }
+
+    function placeFood() {
+      let pos;
+      do {
+        pos = {
+          x: Math.floor(Math.random() * COLS),
+          y: Math.floor(Math.random() * ROWS),
+        };
+      } while (snake.some(s => s.x === pos.x && s.y === pos.y));
+      food = pos;
+    }
+
+    function step() {
+      dir = nextDir;
+      const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+      if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
+        return gameOver();
+      }
+      if (snake.some(s => s.x === head.x && s.y === head.y)) {
+        return gameOver();
+      }
+
+      snake.unshift(head);
+
+      if (head.x === food.x && head.y === food.y) {
+        score++;
+        scoreEl.textContent = score;
+        if (score > best) { best = score; bestEl.textContent = best; }
+        placeFood();
+      } else {
+        snake.pop();
+      }
+
+      draw();
+    }
+
+    function draw() {
+      ctx.fillStyle = "#0f0f0f";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = "#1a1a1a";
+      ctx.lineWidth = 0.5;
+      for (let x = 0; x <= COLS; x++) {
+        ctx.beginPath(); ctx.moveTo(x * CELL, 0); ctx.lineTo(x * CELL, canvas.height); ctx.stroke();
+      }
+      for (let y = 0; y <= ROWS; y++) {
+        ctx.beginPath(); ctx.moveTo(0, y * CELL); ctx.lineTo(canvas.width, y * CELL); ctx.stroke();
+      }
+
+      const fx = food.x * CELL + CELL / 2;
+      const fy = food.y * CELL + CELL / 2;
+      ctx.fillStyle = "#f87171";
+      ctx.shadowColor = "#f87171";
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.arc(fx, fy, CELL / 2 - 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      snake.forEach((seg, i) => {
+        const t = i / snake.length;
+        const green = Math.floor(222 - t * 80);
+        ctx.fillStyle = `rgb(74, ${green}, 128)`;
+        ctx.shadowColor = i === 0 ? "#4ade80" : "transparent";
+        ctx.shadowBlur = i === 0 ? 10 : 0;
+        const pad = i === 0 ? 1 : 2;
+        ctx.beginPath();
+        ctx.roundRect(seg.x * CELL + pad, seg.y * CELL + pad, CELL - pad * 2, CELL - pad * 2, i === 0 ? 4 : 3);
+        ctx.fill();
+      });
+      ctx.shadowBlur = 0;
+    }
+
+    function gameOver() {
+      clearInterval(loop);
+      running = false;
+      overlayTitle.textContent = "GAME OVER";
+      overlayMsg.textContent = `Score : ${score}`;
+      startBtn.textContent = "REJOUER";
+      overlay.style.display = "flex";
+    }
+
+    function startGame() {
+      init();
+      overlay.style.display = "none";
+      running = true;
+      loop = setInterval(step, 130);
+      draw();
+    }
+
+    startBtn.addEventListener("click", startGame);
+
+    document.addEventListener("keydown", e => {
+      const map = {
+        ArrowUp: { x: 0, y: -1 }, ArrowDown: { x: 0, y: 1 },
+        ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 },
+        w: { x: 0, y: -1 }, s: { x: 0, y: 1 },
+        a: { x: -1, y: 0 }, d: { x: 1, y: 0 },
+      };
+      const newDir = map[e.key];
+      if (!newDir) return;
+      if (newDir.x !== -dir.x || newDir.y !== -dir.y) nextDir = newDir;
+      if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)) e.preventDefault();
+    });
+
+    let touchStart = null;
+    canvas.addEventListener("touchstart", e => {
+      touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }, { passive: true });
+    canvas.addEventListener("touchend", e => {
+      if (!touchStart || !running) return;
+      const dx = e.changedTouches[0].clientX - touchStart.x;
+      const dy = e.changedTouches[0].clientY - touchStart.y;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        const nd = dx > 0 ? { x: 1, y: 0 } : { x: -1, y: 0 };
+        if (nd.x !== -dir.x) nextDir = nd;
+      } else {
+        const nd = dy > 0 ? { x: 0, y: 1 } : { x: 0, y: -1 };
+        if (nd.y !== -dir.y) nextDir = nd;
+      }
+    }, { passive: true });
+  </script>
+</body>
+</html>
