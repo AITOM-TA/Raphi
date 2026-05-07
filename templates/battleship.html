@@ -221,6 +221,37 @@
       /* Espace pour que le bouton fixe ne cache pas le canvas */
       #screen-placement { padding-bottom: 88px; }
     }
+
+    /* ── Mobile placement action bar ────── */
+    #mobile-place-bar {
+      display: none;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: #111;
+      border-top: 1px solid #f59e0b55;
+      padding: 12px 16px max(16px, env(safe-area-inset-bottom));
+      gap: 10px;
+      justify-content: center;
+      align-items: center;
+      z-index: 200;
+      box-shadow: 0 -4px 24px #000a;
+    }
+    .mbtn {
+      padding: 14px 0;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9rem;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+      cursor: pointer;
+      border: 2px solid;
+      flex: 1;
+      max-width: 160px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #mbtn-rotate  { background: transparent; border-color: #f59e0b; color: #f59e0b; }
+    .mbtn-confirm { background: #f59e0b; border-color: #f59e0b; color: #0a0a0a; }
+    .mbtn-cancel  { background: transparent; border-color: #444; color: #888; flex: 0; min-width: 52px; font-size: 1.1rem; }
   </style>
 </head>
 <body>
@@ -297,6 +328,13 @@
     <button class="btn" id="btn-replay" style="margin-top:8px">REJOUER</button>
   </div>
 
+  <!-- Mobile placement action bar — shown when a position is previewed -->
+  <div id="mobile-place-bar">
+    <button class="mbtn" id="mbtn-rotate">↻ Tourner</button>
+    <button class="mbtn mbtn-confirm" id="mbtn-place">✓ Placer ici</button>
+    <button class="mbtn mbtn-cancel" id="mbtn-cancel">✕</button>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script>
     // ════════════════════════════════════════════════════════
@@ -331,6 +369,7 @@
     let roomCh = null, myRole = null, roomId = null, latestRoom = null;
     let myShips = [], pendingIdx = 0, horizontal = true, hover = null;
     let confirmed = false, myTurn = false, phase = 'lobby';
+    let mobilePreview = null;
 
     // ── Utils ─────────────────────────────────────────────────
     function cells(ship) {
@@ -426,14 +465,16 @@
       const ctx = canvas.getContext('2d');
       drawBase(ctx);
       drawShips(ctx, myShips, null, true);
-      if (hover && pendingIdx < SHIPS_CFG.length && !confirmed) {
-        const ghost = { ...SHIPS_CFG[pendingIdx], x:hover.x, y:hover.y, h:horizontal };
+      const hPos = mobilePreview || hover;
+      if (hPos && pendingIdx < SHIPS_CFG.length && !confirmed) {
+        const ghost = { ...SHIPS_CFG[pendingIdx], x:hPos.x, y:hPos.y, h:horizontal };
         const valid = canPlace(ghost, myShips);
         ctx.lineWidth=1.5;
         for (const c of cells(ghost)) {
           if (c.x<0||c.x>=10||c.y<0||c.y>=10) continue;
-          ctx.fillStyle   = valid ? '#f59e0b2a' : '#ef44442a';
+          ctx.fillStyle   = valid ? (mobilePreview ? '#f59e0b55' : '#f59e0b2a') : '#ef44442a';
           ctx.strokeStyle = valid ? '#f59e0b'   : '#ef4444';
+          ctx.lineWidth   = mobilePreview ? 2 : 1.5;
           ctx.beginPath(); ctx.roundRect(OFFSET+c.x*CELL+2,OFFSET+c.y*CELL+2,CELL-4,CELL-4,3);
           ctx.fill(); ctx.stroke();
         }
@@ -551,8 +592,17 @@
     }
 
     // ── Placement ─────────────────────────────────────────────
+    function showMobilePlaceBar() {
+      document.getElementById('mobile-place-bar').style.display = 'flex';
+    }
+    function hideMobilePlaceBar() {
+      document.getElementById('mobile-place-bar').style.display = 'none';
+      mobilePreview = null; hover = null; renderPlacement();
+    }
+
     function initPlacement() {
       myShips=[]; pendingIdx=0; horizontal=true; hover=null; confirmed=false;
+      mobilePreview=null; hideMobilePlaceBar();
       document.getElementById('btn-confirm').disabled=true;
       document.getElementById('place-status').textContent='';
       calcSize();
@@ -621,6 +671,12 @@
       setTimeout(()=>{b.textContent='Copier';},2000);
     });
     document.getElementById('btn-rotate').addEventListener('click', ()=>{horizontal=!horizontal;renderPlacement();});
+    document.getElementById('mbtn-rotate').addEventListener('click', ()=>{horizontal=!horizontal;renderPlacement();});
+    document.getElementById('mbtn-place').addEventListener('click', ()=>{
+      if (mobilePreview) placeShip(mobilePreview.x, mobilePreview.y);
+      hideMobilePlaceBar();
+    });
+    document.getElementById('mbtn-cancel').addEventListener('click', hideMobilePlaceBar);
     document.getElementById('btn-undo').addEventListener('click', ()=>{
       if (!myShips.length||confirmed) return;
       myShips.pop(); pendingIdx--;
@@ -648,6 +704,8 @@
     placeC.addEventListener('contextmenu', e=>{e.preventDefault();horizontal=!horizontal;renderPlacement();});
     placeC.addEventListener('touchstart', e=>{
       e.preventDefault();
+      // New touch cancels any pending preview
+      if (mobilePreview) { mobilePreview=null; hideMobilePlaceBar(); }
       const {px,py}=canvasPos(e,placeC); hover=px2cell(px,py); renderPlacement();
     },{passive:false});
     placeC.addEventListener('touchmove', e=>{
@@ -657,7 +715,13 @@
     placeC.addEventListener('touchend', e=>{
       e.preventDefault();
       const {px,py}=canvasPos(e,placeC);
-      const c=px2cell(px,py); if(c)placeShip(c.x,c.y); hover=null; renderPlacement();
+      const c=px2cell(px,py);
+      if (c && pendingIdx < SHIPS_CFG.length && !confirmed) {
+        mobilePreview = c; hover = null;
+        renderPlacement(); showMobilePlaceBar();
+      } else {
+        hover=null; renderPlacement();
+      }
     },{passive:false});
 
     // Enemy canvas — mouse + touch
