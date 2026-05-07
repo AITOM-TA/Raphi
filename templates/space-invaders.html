@@ -83,104 +83,174 @@
     calcSize();
 
     // ── Config ────────────────────────────
-    const AROWS = 5, ACOLS = 11;
-    const AW = 24, AH = 18, AGX = 16, AGY = 14;
+    const AROWS=5, ACOLS=11, AW=24, AH=18, AGX=16, AGY=14;
     const FORM_X = Math.round((CW - ACOLS*(AW+AGX) + AGX) / 2);
     const FORM_Y = 46;
-    const PLY = CH - 28;
-    const PW = 34, PSPD = 260;
+    const PLY = CH - 28, PW = 34, PSPD = 260;
     const ROW_PTS = [30, 30, 20, 20, 10];
     const ACOLS_COLORS = ['#ef4444','#fb923c','#facc15'];
 
+    // ── Power-up config ───────────────────
+    const PU_TYPES  = ['triple','rapid','shield','life'];
+    const PU_COLORS = {triple:'#22d3ee', rapid:'#facc15', shield:'#60a5fa', life:'#4ade80'};
+    const PU_ICONS  = {triple:'✦✦✦', rapid:'⚡', shield:'🛡', life:'♥'};
+    const PU_DUR    = {triple:8000, rapid:7000, shield:6000}; // ms (life is instant)
+    const PU_DROP   = 0.18; // 18% chance per alien kill
+
     // ── State ─────────────────────────────
-    let aliens=[], pBullet=null, aBullets=[], alienDir=1;
+    let aliens=[], pBullets=[], aBullets=[], powerups=[], alienDir=1;
     let px=CW/2, score=0, lives=3, level=1;
     let alienMT=0, alienST=0, aFrame=0;
+    let activePU=null;   // {type, until}
+    let shielded=false;  // one-hit shield overlay
+    let lastShot=0;
     let running=false, rafId=0, lastTs=0;
     const keys={};
 
     // ── Init ──────────────────────────────
     function mkAliens() {
       aliens=[];
-      for (let r=0;r<AROWS;r++)
-        for (let c=0;c<ACOLS;c++)
+      for(let r=0;r<AROWS;r++)
+        for(let c=0;c<ACOLS;c++)
           aliens.push({r,c, x:FORM_X+c*(AW+AGX), y:FORM_Y+r*(AH+AGY), alive:true, pts:ROW_PTS[r]});
-      alienDir=1; pBullet=null; aBullets=[];
+      alienDir=1; pBullets=[]; aBullets=[]; powerups=[];
       alienMT=0; alienST=0; aFrame=0;
+      activePU=null; shielded=false; lastShot=0;
     }
     function alive() { return aliens.filter(a=>a.alive); }
     function alienInterval() {
       const n=alive().length, tot=AROWS*ACOLS;
-      return Math.max(70, (Math.max(300,800-(level-1)*70)) * n/tot);
+      return Math.max(70,(Math.max(300,800-(level-1)*70))*n/tot);
     }
 
-    // ── Move ──────────────────────────────
+    // ── Shoot ─────────────────────────────
+    function playerShoot() {
+      if(!running) return;
+      const now=performance.now();
+      const isRapid = activePU&&activePU.type==='rapid'&&now<activePU.until;
+      const isTriple = activePU&&activePU.type==='triple'&&now<activePU.until;
+      const cooldown = isRapid ? 160 : 420;
+      const maxB = isRapid ? 4 : (isTriple ? 6 : 1);
+      if(now-lastShot < cooldown) return;
+      if(pBullets.length >= maxB) return;
+      lastShot=now;
+      if(isTriple) {
+        pBullets.push({x:px-11,y:PLY-18,vx:-30,vy:-490});
+        pBullets.push({x:px,   y:PLY-20,vx:0,  vy:-510});
+        pBullets.push({x:px+11,y:PLY-18,vx:30, vy:-490});
+      } else {
+        pBullets.push({x:px, y:PLY-18, vx:0, vy:-490});
+      }
+    }
+
+    // ── Move aliens ───────────────────────
     function moveAliens() {
       const aa=alive(); if(!aa.length) return;
       aFrame^=1;
       const step=6+Math.min(level-1,4);
       const maxX=Math.max(...aa.map(a=>a.x))+AW;
       const minX=Math.min(...aa.map(a=>a.x));
-      if (alienDir===1 && maxX+step>CW-4) {
-        for(const a of aa) a.y+=15; alienDir=-1;
-      } else if (alienDir===-1 && minX-step<4) {
-        for(const a of aa) a.y+=15; alienDir=1;
-      } else {
-        for(const a of aa) a.x+=alienDir*step;
-      }
+      if(alienDir===1&&maxX+step>CW-4)      { for(const a of aa) a.y+=15; alienDir=-1; }
+      else if(alienDir===-1&&minX-step<4)   { for(const a of aa) a.y+=15; alienDir=1; }
+      else                                  { for(const a of aa) a.x+=alienDir*step; }
     }
     function alienShoot() {
       const aa=alive(); if(!aa.length) return;
       const byCol={};
-      for(const a of aa) { if(!byCol[a.c]||a.r>byCol[a.c].r) byCol[a.c]=a; }
+      for(const a of aa){ if(!byCol[a.c]||a.r>byCol[a.c].r) byCol[a.c]=a; }
       const shooters=Object.values(byCol);
       const s=shooters[Math.floor(Math.random()*shooters.length)];
       aBullets.push({x:s.x+AW/2, y:s.y+AH, vy:170+level*15});
     }
-    function playerShoot() {
-      if(!running||pBullet) return;
-      pBullet={x:px, y:PLY-18};
+
+    // ── Power-ups ─────────────────────────
+    function dropPowerup(ax, ay) {
+      if(Math.random()>PU_DROP) return;
+      const type=PU_TYPES[Math.floor(Math.random()*PU_TYPES.length)];
+      powerups.push({x:ax, y:ay, type, vy:100});
+    }
+    function applyPU(type) {
+      const now=performance.now();
+      if(type==='life') {
+        lives=Math.min(5,lives+1);
+        document.getElementById('lv').textContent='♥'.repeat(lives); return;
+      }
+      if(type==='shield') { shielded=true; activePU={type,until:now+PU_DUR.shield}; return; }
+      activePU={type, until:now+PU_DUR[type]};
     }
 
     // ── Update ────────────────────────────
     function update(dt) {
-      if(keys.ArrowLeft||keys.a) px=Math.max(PW/2+4, px-PSPD*dt);
-      if(keys.ArrowRight||keys.d) px=Math.min(CW-PW/2-4, px+PSPD*dt);
-      if(pBullet) { pBullet.y-=490*dt; if(pBullet.y<-10) pBullet=null; }
+      const now=performance.now();
+      // Expire power-up
+      if(activePU&&now>activePU.until) {
+        if(activePU.type==='shield') shielded=false;
+        activePU=null;
+      }
+
+      // Player movement
+      if(keys.ArrowLeft||keys.a)  px=Math.max(PW/2+4,px-PSPD*dt);
+      if(keys.ArrowRight||keys.d) px=Math.min(CW-PW/2-4,px+PSPD*dt);
+
+      // Player bullets
+      for(let i=pBullets.length-1;i>=0;i--) {
+        pBullets[i].x+=pBullets[i].vx*dt;
+        pBullets[i].y+=pBullets[i].vy*dt;
+        if(pBullets[i].y<-10||pBullets[i].x<-10||pBullets[i].x>CW+10) pBullets.splice(i,1);
+      }
+
+      // Alien bullets
       for(let i=aBullets.length-1;i>=0;i--) {
         aBullets[i].y+=aBullets[i].vy*dt;
         if(aBullets[i].y>CH+10) aBullets.splice(i,1);
       }
-      alienMT+=dt*1000;
-      if(alienMT>=alienInterval()) { alienMT=0; moveAliens(); }
-      const sInt=Math.max(500,1600-(level-1)*120);
-      alienST+=dt*1000;
-      if(alienST>=sInt) { alienST=0; if(Math.random()<0.8) alienShoot(); }
 
-      // player bullet vs aliens
-      if(pBullet) {
+      // Falling power-ups
+      for(let i=powerups.length-1;i>=0;i--) {
+        powerups[i].y+=powerups[i].vy*dt;
+        // Collect
+        if(Math.abs(powerups[i].x-px)<PW/2+16 && powerups[i].y>=PLY-18 && powerups[i].y<=PLY+8) {
+          applyPU(powerups[i].type); powerups.splice(i,1); continue;
+        }
+        if(powerups[i].y>CH+20) powerups.splice(i,1);
+      }
+
+      // Alien timing
+      alienMT+=dt*1000;
+      if(alienMT>=alienInterval()){ alienMT=0; moveAliens(); }
+      alienST+=dt*1000;
+      if(alienST>=Math.max(500,1600-(level-1)*120)){ alienST=0; if(Math.random()<0.8) alienShoot(); }
+
+      // Player bullets vs aliens
+      outer: for(let i=pBullets.length-1;i>=0;i--) {
+        const b=pBullets[i];
         for(const a of alive()) {
-          if(pBullet.x>=a.x&&pBullet.x<=a.x+AW&&pBullet.y>=a.y&&pBullet.y<=a.y+AH) {
+          if(b.x>=a.x&&b.x<=a.x+AW&&b.y>=a.y&&b.y<=a.y+AH) {
             a.alive=false; score+=a.pts;
             document.getElementById('sc').textContent=score;
-            pBullet=null; break;
+            dropPowerup(a.x+AW/2, a.y+AH/2);
+            pBullets.splice(i,1);
+            continue outer;
           }
         }
       }
-      // alien bullets vs player
+
+      // Alien bullets vs player
       for(let i=aBullets.length-1;i>=0;i--) {
         const b=aBullets[i];
-        if(Math.abs(b.x-px)<PW/2+3 && b.y>=PLY-16 && b.y<=PLY+8) {
-          aBullets.splice(i,1); lives--;
+        if(Math.abs(b.x-px)<PW/2+3&&b.y>=PLY-16&&b.y<=PLY+8) {
+          aBullets.splice(i,1);
+          if(shielded) { shielded=false; if(activePU?.type==='shield') activePU=null; continue; }
+          lives--;
           document.getElementById('lv').textContent='♥'.repeat(Math.max(0,lives));
-          if(lives<=0) { doGameOver(); return; }
+          if(lives<=0){ doGameOver(); return; }
           px=CW/2;
         }
       }
-      // aliens reach player
-      for(const a of alive()) { if(a.y+AH>=PLY-12) { doGameOver(); return; } }
-      // level up
-      if(!alive().length) { level++; document.getElementById('nv').textContent=level; mkAliens(); px=CW/2; }
+
+      // Aliens reach bottom
+      for(const a of alive()){ if(a.y+AH>=PLY-12){ doGameOver(); return; } }
+      if(!alive().length){ level++; document.getElementById('nv').textContent=level; mkAliens(); px=CW/2; }
     }
 
     // ── Draw ──────────────────────────────
@@ -189,29 +259,70 @@
       // stars
       ctx.fillStyle='#ffffff18';
       for(let i=0;i<70;i++) ctx.fillRect((i*137+23)%CW,(i*97+41)%CH,1,1);
+
       // aliens
-      for(const a of aliens) {
+      for(const a of aliens){
         if(!a.alive) continue;
-        const type=a.r<2?0:a.r<4?1:2;
-        drawAlien(a.x+AW/2, a.y+AH/2, type);
+        drawAlien(a.x+AW/2, a.y+AH/2, a.r<2?0:a.r<4?1:2);
       }
+
+      // power-up capsules
+      for(const p of powerups){
+        const c=PU_COLORS[p.type];
+        ctx.fillStyle=c; ctx.shadowColor=c; ctx.shadowBlur=10;
+        ctx.beginPath(); ctx.roundRect(p.x-13,p.y-9,26,18,9); ctx.fill();
+        ctx.shadowBlur=0;
+        ctx.fillStyle='rgba(0,0,0,0.7)';
+        ctx.beginPath(); ctx.roundRect(p.x-11,p.y-7,22,14,7); ctx.fill();
+        ctx.fillStyle=c; ctx.font='bold 9px "Courier New"'; ctx.textAlign='center';
+        ctx.fillText(PU_ICONS[p.type], p.x, p.y+4);
+      }
+
       // player
       drawPlayer(px, PLY);
-      // player bullet
-      if(pBullet) {
-        ctx.fillStyle='#4ade80'; ctx.shadowColor='#4ade80'; ctx.shadowBlur=8;
-        ctx.fillRect(pBullet.x-2, pBullet.y-7, 4, 12); ctx.shadowBlur=0;
+
+      // Shield ring around player
+      if(shielded){
+        ctx.strokeStyle='#60a5fa'; ctx.shadowColor='#60a5fa'; ctx.shadowBlur=12; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.ellipse(px,PLY-8,22,22,0,0,Math.PI*2); ctx.stroke();
+        ctx.shadowBlur=0;
       }
-      // alien bullets
-      ctx.shadowBlur=6;
-      for(const b of aBullets) {
-        ctx.fillStyle='#ef4444'; ctx.shadowColor='#ef4444';
-        ctx.fillRect(b.x-2, b.y-5, 4, 9);
+
+      // player bullets
+      ctx.shadowBlur=8;
+      for(const b of pBullets){
+        const isTriple=activePU?.type==='triple';
+        ctx.fillStyle=isTriple?'#22d3ee':'#4ade80';
+        ctx.shadowColor=isTriple?'#22d3ee':'#4ade80';
+        ctx.fillRect(b.x-2,b.y-7,4,12);
       }
       ctx.shadowBlur=0;
-      // ground
+
+      // alien bullets
+      ctx.shadowBlur=6;
+      for(const b of aBullets){
+        ctx.fillStyle='#ef4444'; ctx.shadowColor='#ef4444';
+        ctx.fillRect(b.x-2,b.y-5,4,9);
+      }
+      ctx.shadowBlur=0;
+
+      // Active power-up HUD
+      if(activePU){
+        const now=performance.now();
+        const rem=Math.max(0,(activePU.until-now)/1000);
+        if(rem>0){
+          const c=PU_COLORS[activePU.type];
+          ctx.fillStyle=c+'33'; ctx.strokeStyle=c; ctx.lineWidth=1;
+          ctx.beginPath(); ctx.roundRect(5,5,90,20,3); ctx.fill(); ctx.stroke();
+          ctx.fillStyle=c; ctx.font='bold 9px "Courier New"'; ctx.textAlign='left';
+          ctx.fillText(PU_ICONS[activePU.type]+' '+rem.toFixed(1)+'s', 10, 19);
+        }
+      }
+
+      // Ground line
       ctx.fillStyle='#ef444433'; ctx.fillRect(0,CH-3,CW,2);
     }
+
     function drawAlien(cx,cy,type) {
       const c=ACOLS_COLORS[type];
       ctx.fillStyle=c; ctx.shadowColor=c; ctx.shadowBlur=5;
@@ -221,17 +332,18 @@
       ctx.beginPath(); ctx.arc(cx-4,cy-1,2.5,0,Math.PI*2); ctx.fill();
       ctx.beginPath(); ctx.arc(cx+4,cy-1,2.5,0,Math.PI*2); ctx.fill();
       ctx.fillStyle=c;
-      if(aFrame) {
+      if(aFrame){
         ctx.fillRect(cx-15,cy+5,4,4); ctx.fillRect(cx+11,cy+5,4,4);
-        ctx.fillRect(cx-4, cy+6,3,3); ctx.fillRect(cx+1, cy+6,3,3);
+        ctx.fillRect(cx-4,cy+6,3,3);  ctx.fillRect(cx+1,cy+6,3,3);
       } else {
         ctx.fillRect(cx-13,cy+5,4,4); ctx.fillRect(cx+9,cy+5,4,4);
-        ctx.fillRect(cx-4, cy+4,3,3); ctx.fillRect(cx+1, cy+4,3,3);
+        ctx.fillRect(cx-4,cy+4,3,3);  ctx.fillRect(cx+1,cy+4,3,3);
       }
-      if(type===0) { ctx.fillRect(cx-8,cy-13,2,7); ctx.fillRect(cx+6,cy-13,2,7); }
+      if(type===0){ ctx.fillRect(cx-8,cy-13,2,7); ctx.fillRect(cx+6,cy-13,2,7); }
     }
     function drawPlayer(cx,y) {
-      ctx.fillStyle='#4ade80'; ctx.shadowColor='#4ade80'; ctx.shadowBlur=10;
+      const c = shielded ? '#60a5fa' : '#4ade80';
+      ctx.fillStyle=c; ctx.shadowColor=c; ctx.shadowBlur=10;
       ctx.beginPath(); ctx.moveTo(cx,y-17); ctx.lineTo(cx-5,y-8); ctx.lineTo(cx+5,y-8); ctx.closePath(); ctx.fill();
       ctx.beginPath(); ctx.moveTo(cx-5,y-8); ctx.lineTo(cx-17,y+2); ctx.lineTo(cx+17,y+2); ctx.lineTo(cx+5,y-8); ctx.closePath(); ctx.fill();
       ctx.fillRect(cx-17,y+2,34,6);
@@ -264,8 +376,8 @@
       document.getElementById('start-btn').textContent='REJOUER';
       document.getElementById('overlay').style.display='flex';
       document.getElementById('lb-wrap').style.display='none';
-      if(score>0) {
-        const form=document.getElementById('score-form'); form.style.display='flex';
+      if(score>0){
+        document.getElementById('score-form').style.display='flex';
         const btn=document.getElementById('save-btn'); btn.disabled=false; btn.textContent='ENREGISTRER →';
         const inp=document.getElementById('player-name'); inp.value=localStorage.getItem('rabargo_name')||'';
         setTimeout(()=>inp.focus(),150);
@@ -306,15 +418,14 @@
     document.getElementById('save-btn').addEventListener('click',saveScore);
     document.getElementById('player-name').addEventListener('keydown',e=>{if(e.key==='Enter')saveScore();});
 
-    // Mobile buttons
     const cbL=document.getElementById('cb-l'), cbR=document.getElementById('cb-r'), cbF=document.getElementById('cb-f');
     cbL.addEventListener('touchstart',e=>{e.preventDefault();keys.ArrowLeft=true;},{passive:false});
     cbL.addEventListener('touchend',()=>{keys.ArrowLeft=false;});
     cbR.addEventListener('touchstart',e=>{e.preventDefault();keys.ArrowRight=true;},{passive:false});
     cbR.addEventListener('touchend',()=>{keys.ArrowRight=false;});
     cbF.addEventListener('touchstart',e=>{e.preventDefault();playerShoot();},{passive:false});
-    cbL.addEventListener('mousedown',()=>{keys.ArrowLeft=true;}); cbL.addEventListener('mouseup',()=>{keys.ArrowLeft=false;});
-    cbR.addEventListener('mousedown',()=>{keys.ArrowRight=true;}); cbR.addEventListener('mouseup',()=>{keys.ArrowRight=false;});
+    cbL.addEventListener('mousedown',()=>keys.ArrowLeft=true); cbL.addEventListener('mouseup',()=>keys.ArrowLeft=false);
+    cbR.addEventListener('mousedown',()=>keys.ArrowRight=true); cbR.addEventListener('mouseup',()=>keys.ArrowRight=false);
     cbF.addEventListener('click',()=>playerShoot());
 
     window.addEventListener('resize',()=>{ calcSize(); if(!running) draw(); });

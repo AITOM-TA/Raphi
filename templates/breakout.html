@@ -76,28 +76,34 @@
     calcSize();
 
     // ── Brick grid ────────────────────────
-    const BCOLS = 11, BROWS = 7;
-    const BW = 36, BH = 14, BGAP = 5;
+    const BCOLS=11, BROWS=7, BW=36, BH=14, BGAP=5;
     const BOFF_X = Math.round((CW - BCOLS*(BW+BGAP) + BGAP) / 2);
     const BOFF_Y = 52;
     const BCOLORS = ['#ef4444','#fb923c','#facc15','#4ade80','#22d3ee','#60a5fa','#a855f7'];
-    const BPTS    = [70, 60, 50, 40, 30, 20, 10];
+    const BPTS    = [70,60,50,40,30,20,10];
 
-    // ── Paddle ────────────────────────────
-    const PH = 12, PAD_SPEED = 320;
-    let padW = 80, padX = CW / 2;
+    // ── Paddle / Ball ─────────────────────
+    const PH=12, PAD_SPEED=320, BRAD=7;
     const PAD_Y = CH - 30;
+    let padW=80, padX=CW/2;
+    let ball={x:0,y:0,vx:0,vy:0};
+    const BASE_SPEED = 310;
 
-    // ── Ball ──────────────────────────────
-    const BRAD = 7;
-    let ball = {x:0,y:0,vx:0,vy:0};
-    const BASE_SPEED = 320;
+    // ── Power-up config ───────────────────
+    const PU_TYPES  = ['wide','slow','life','sticky'];
+    const PU_COLORS = {wide:'#60a5fa', slow:'#4ade80', life:'#f472b6', sticky:'#facc15'};
+    const PU_ICONS  = {wide:'↔', slow:'❄', life:'♥', sticky:'✦'};
+    const PU_DUR    = {wide:10000, slow:8000, sticky:8000};
+    const PU_DROP   = 0.20;
 
     // ── State ─────────────────────────────
-    let bricks=[], score=0, lives=3, level=1;
-    let running=false, ballLaunched=false, rafId=0, lastTs=0;
+    let bricks=[], powerups=[], activePU=null;
+    let score=0, lives=3, level=1;
+    let running=false, ballLaunched=false, stickyBall=false;
+    let rafId=0, lastTs=0;
     const keys={};
 
+    // ── Init ──────────────────────────────
     function mkBricks() {
       bricks=[];
       for(let r=0;r<BROWS;r++)
@@ -106,105 +112,151 @@
     }
     function resetBall() {
       ball.x=padX; ball.y=PAD_Y-BRAD-1; ball.vx=0; ball.vy=0;
-      ballLaunched=false;
+      ballLaunched=false; stickyBall=false;
     }
     function launchBall() {
       if(ballLaunched) return;
-      const sp=BASE_SPEED+(level-1)*25;
-      const angle=(Math.random()*0.6+0.2)*Math.PI; // 36°–144° upward
-      ball.vx=sp*Math.cos(angle)*(Math.random()<0.5?1:-1);
-      ball.vy=-sp*Math.abs(Math.sin(angle));
+      const sp = BASE_SPEED+(level-1)*22;
+      const angle = (Math.random()*0.5+0.25)*Math.PI;
+      ball.vx = sp*Math.cos(angle)*(Math.random()<0.5?1:-1);
+      ball.vy = -sp*Math.abs(Math.sin(angle));
       ballLaunched=true;
+    }
+
+    // ── Power-ups ─────────────────────────
+    function dropPU(bx, by) {
+      if(Math.random()>PU_DROP) return;
+      const type=PU_TYPES[Math.floor(Math.random()*PU_TYPES.length)];
+      powerups.push({x:bx+BW/2, y:by+BH/2, type, vy:110});
+    }
+    function applyPU(type) {
+      const now=performance.now();
+      if(type==='life'){ lives=Math.min(5,lives+1); document.getElementById('lv').textContent='♥'.repeat(lives); return; }
+      if(type==='wide'){ padW=Math.min(140,padW+36); activePU={type,until:now+PU_DUR.wide}; return; }
+      activePU={type, until:now+PU_DUR[type]};
     }
 
     // ── Update ────────────────────────────
     function update(dt) {
-      // Paddle keyboard
+      const now=performance.now();
+      if(activePU&&now>activePU.until){
+        if(activePU.type==='wide') padW=80;
+        activePU=null;
+      }
+
+      // Paddle
       if(keys.ArrowLeft||keys.a)  padX=Math.max(padW/2, padX-PAD_SPEED*dt);
       if(keys.ArrowRight||keys.d) padX=Math.min(CW-padW/2, padX+PAD_SPEED*dt);
-      // Ball follows paddle before launch
-      if(!ballLaunched) { ball.x=padX; ball.y=PAD_Y-BRAD-1; return; }
 
-      // Move ball
-      ball.x+=ball.vx*dt; ball.y+=ball.vy*dt;
+      // Falling power-ups
+      for(let i=powerups.length-1;i>=0;i--){
+        powerups[i].y+=powerups[i].vy*dt;
+        if(Math.abs(powerups[i].x-padX)<padW/2+16&&powerups[i].y>=PAD_Y-14&&powerups[i].y<=PAD_Y+6){
+          applyPU(powerups[i].type); powerups.splice(i,1); continue;
+        }
+        if(powerups[i].y>CH+20) powerups.splice(i,1);
+      }
+
+      if(!ballLaunched){ ball.x=padX; ball.y=PAD_Y-BRAD-1; return; }
+
+      // Ball speed factor (slow power-up)
+      const slow = activePU&&activePU.type==='slow'&&now<activePU.until ? 0.55 : 1;
+      ball.x+=ball.vx*dt*slow; ball.y+=ball.vy*dt*slow;
 
       // Wall bounces
-      if(ball.x-BRAD<=0)   { ball.x=BRAD;      ball.vx=Math.abs(ball.vx); }
-      if(ball.x+BRAD>=CW)  { ball.x=CW-BRAD;   ball.vx=-Math.abs(ball.vx); }
-      if(ball.y-BRAD<=0)   { ball.y=BRAD;       ball.vy=Math.abs(ball.vy); }
+      if(ball.x-BRAD<=0)  { ball.x=BRAD;     ball.vx=Math.abs(ball.vx); }
+      if(ball.x+BRAD>=CW) { ball.x=CW-BRAD;  ball.vx=-Math.abs(ball.vx); }
+      if(ball.y-BRAD<=0)  { ball.y=BRAD;      ball.vy=Math.abs(ball.vy); }
 
-      // Ball lost
-      if(ball.y-BRAD>CH+20) {
-        lives--;
-        document.getElementById('lv').textContent='♥'.repeat(Math.max(0,lives));
-        if(lives<=0) { doGameOver(); return; }
-        resetBall();
-        return;
+      // Lost ball
+      if(ball.y-BRAD>CH+20){
+        lives--; document.getElementById('lv').textContent='♥'.repeat(Math.max(0,lives));
+        if(lives<=0){ doGameOver(); return; }
+        padW=80; activePU=null; powerups=[];
+        resetBall(); return;
       }
 
       // Paddle collision
-      if(ball.vy>0 &&
-         ball.y+BRAD>=PAD_Y-PH/2 && ball.y+BRAD<=PAD_Y+PH &&
-         ball.x>=padX-padW/2-BRAD && ball.x<=padX+padW/2+BRAD) {
-        ball.y=PAD_Y-PH/2-BRAD;
-        const rel=(ball.x-padX)/(padW/2);      // -1..1
+      if(ball.vy>0 && ball.y+BRAD>=PAD_Y-PH && ball.y+BRAD<=PAD_Y+4 &&
+         ball.x>=padX-padW/2-BRAD && ball.x<=padX+padW/2+BRAD){
+        ball.y=PAD_Y-PH-BRAD;
+        const rel=(ball.x-padX)/(padW/2);
         const sp=Math.sqrt(ball.vx*ball.vx+ball.vy*ball.vy);
-        ball.vx=rel*sp*0.9;
-        ball.vy=-Math.sqrt(Math.max(sp*sp-ball.vx*ball.vx, sp*sp*0.2));
+        ball.vx=rel*sp*0.85;
+        ball.vy=-Math.sqrt(Math.max(sp*sp-ball.vx*ball.vx, sp*sp*0.15));
+        // Sticky: hold ball on paddle
+        if(activePU&&activePU.type==='sticky'&&now<activePU.until){ ballLaunched=false; }
       }
 
       // Brick collisions
-      for(const b of bricks) {
+      for(const b of bricks){
         if(!b.alive) continue;
-        const bx=b.x, by=b.y, bw=BW, bh=BH;
-        if(ball.x+BRAD>bx&&ball.x-BRAD<bx+bw&&ball.y+BRAD>by&&ball.y-BRAD<by+bh) {
+        if(ball.x+BRAD>b.x&&ball.x-BRAD<b.x+BW&&ball.y+BRAD>b.y&&ball.y-BRAD<b.y+BH){
           b.alive=false; score+=b.pts;
           document.getElementById('sc').textContent=score;
-          const overL=ball.x+BRAD-bx, overR=bx+bw-(ball.x-BRAD);
-          const overT=ball.y+BRAD-by, overB=by+bh-(ball.y-BRAD);
-          if(Math.min(overL,overR)<Math.min(overT,overB)) ball.vx=-ball.vx;
-          else ball.vy=-ball.vy;
+          dropPU(b.x, b.y);
+          const oL=ball.x+BRAD-b.x, oR=b.x+BW-(ball.x-BRAD);
+          const oT=ball.y+BRAD-b.y, oB=b.y+BH-(ball.y-BRAD);
+          if(Math.min(oL,oR)<Math.min(oT,oB)) ball.vx=-ball.vx; else ball.vy=-ball.vy;
           break;
         }
       }
-      // All bricks cleared → next level
-      if(!bricks.some(b=>b.alive)) nextLevel();
-    }
-
-    function nextLevel() {
-      level++;
-      document.getElementById('nv').textContent=level;
-      mkBricks(); resetBall();
+      if(!bricks.some(b=>b.alive)){ level++; document.getElementById('nv').textContent=level; mkBricks(); resetBall(); padW=80; activePU=null; }
     }
 
     // ── Draw ──────────────────────────────
     function draw() {
       ctx.fillStyle='#060610'; ctx.fillRect(0,0,CW,CH);
+
       // bricks
-      for(const b of bricks) {
+      for(const b of bricks){
         if(!b.alive) continue;
-        ctx.fillStyle=BCOLORS[b.r];
-        ctx.shadowColor=BCOLORS[b.r]; ctx.shadowBlur=4;
-        ctx.beginPath(); ctx.roundRect(b.x,b.y,BW,BH,3); ctx.fill();
-        ctx.shadowBlur=0;
-        // shine
-        ctx.fillStyle='rgba(255,255,255,0.18)';
+        ctx.fillStyle=BCOLORS[b.r]; ctx.shadowColor=BCOLORS[b.r]; ctx.shadowBlur=4;
+        ctx.beginPath(); ctx.roundRect(b.x,b.y,BW,BH,3); ctx.fill(); ctx.shadowBlur=0;
+        ctx.fillStyle='rgba(255,255,255,0.16)';
         ctx.beginPath(); ctx.roundRect(b.x+2,b.y+2,BW-4,4,1); ctx.fill();
       }
+
+      // power-up capsules
+      for(const p of powerups){
+        const c=PU_COLORS[p.type];
+        ctx.fillStyle=c; ctx.shadowColor=c; ctx.shadowBlur=10;
+        ctx.beginPath(); ctx.roundRect(p.x-13,p.y-9,26,18,9); ctx.fill(); ctx.shadowBlur=0;
+        ctx.fillStyle='rgba(0,0,0,0.65)';
+        ctx.beginPath(); ctx.roundRect(p.x-11,p.y-7,22,14,7); ctx.fill();
+        ctx.fillStyle=c; ctx.font='bold 9px "Courier New"'; ctx.textAlign='center';
+        ctx.fillText(PU_ICONS[p.type], p.x, p.y+4);
+      }
+
       // paddle
-      ctx.fillStyle='#a855f7'; ctx.shadowColor='#a855f7'; ctx.shadowBlur=12;
+      const pColor = activePU&&activePU.type==='wide' ? '#60a5fa' : '#a855f7';
+      ctx.fillStyle=pColor; ctx.shadowColor=pColor; ctx.shadowBlur=12;
       ctx.beginPath(); ctx.roundRect(padX-padW/2, PAD_Y-PH, padW, PH, 4); ctx.fill();
       ctx.shadowBlur=0;
+
       // ball
-      ctx.fillStyle='#fff'; ctx.shadowColor='#a855f7'; ctx.shadowBlur=14;
+      const now=performance.now();
+      const bColor = activePU&&activePU.type==='slow'&&now<activePU.until ? '#4ade80' : '#fff';
+      ctx.fillStyle=bColor; ctx.shadowColor=bColor; ctx.shadowBlur=14;
       ctx.beginPath(); ctx.arc(ball.x,ball.y,BRAD,0,Math.PI*2); ctx.fill();
       ctx.shadowBlur=0;
+
       // launch hint
-      if(!ballLaunched&&running) {
-        ctx.fillStyle='#ffffff33';
-        ctx.font='11px "Courier New"';
-        ctx.textAlign='center';
+      if(!ballLaunched&&running){
+        ctx.fillStyle='#ffffff33'; ctx.font='11px "Courier New"'; ctx.textAlign='center';
         ctx.fillText('ESPACE ou TAP pour lancer', CW/2, PAD_Y-28);
+      }
+
+      // Active PU indicator
+      if(activePU){
+        const rem=Math.max(0,(activePU.until-now)/1000);
+        if(rem>0){
+          const c=PU_COLORS[activePU.type];
+          ctx.fillStyle=c+'33'; ctx.strokeStyle=c; ctx.lineWidth=1;
+          ctx.beginPath(); ctx.roundRect(5,5,90,20,3); ctx.fill(); ctx.stroke();
+          ctx.fillStyle=c; ctx.font='bold 9px "Courier New"'; ctx.textAlign='left';
+          ctx.fillText(PU_ICONS[activePU.type]+' '+rem.toFixed(1)+'s', 10, 19);
+        }
       }
     }
 
@@ -216,7 +268,7 @@
       rafId=requestAnimationFrame(gameLoop);
     }
     function startGame() {
-      score=0; lives=3; level=1; padX=CW/2; padW=80;
+      score=0; lives=3; level=1; padX=CW/2; padW=80; activePU=null; powerups=[];
       document.getElementById('sc').textContent=0;
       document.getElementById('lv').textContent='♥♥♥';
       document.getElementById('nv').textContent=1;
@@ -235,8 +287,8 @@
       document.getElementById('start-btn').textContent='REJOUER';
       document.getElementById('overlay').style.display='flex';
       document.getElementById('lb-wrap').style.display='none';
-      if(score>0) {
-        const form=document.getElementById('score-form'); form.style.display='flex';
+      if(score>0){
+        document.getElementById('score-form').style.display='flex';
         const btn=document.getElementById('save-btn'); btn.disabled=false; btn.textContent='ENREGISTRER →';
         const inp=document.getElementById('player-name'); inp.value=localStorage.getItem('rabargo_name')||'';
         setTimeout(()=>inp.focus(),150);
@@ -273,16 +325,12 @@
       if(e.key==='ArrowLeft'||e.key==='ArrowRight') e.preventDefault();
     });
     document.addEventListener('keyup',e=>{keys[e.key]=false;});
-
-    // Mouse paddle
     canvas.addEventListener('mousemove',e=>{
       const rect=canvas.getBoundingClientRect();
       padX=((e.clientX-rect.left)/rect.width)*CW;
       padX=Math.max(padW/2, Math.min(CW-padW/2, padX));
     });
     canvas.addEventListener('click',()=>{ if(running) launchBall(); });
-
-    // Touch paddle
     canvas.addEventListener('touchmove',e=>{
       e.preventDefault();
       const rect=canvas.getBoundingClientRect();
@@ -290,10 +338,8 @@
       padX=Math.max(padW/2, Math.min(CW-padW/2, padX));
     },{passive:false});
     canvas.addEventListener('touchstart',e=>{
-      e.preventDefault();
-      if(running) launchBall();
+      e.preventDefault(); if(running) launchBall();
     },{passive:false});
-
     document.getElementById('start-btn').addEventListener('click',startGame);
     document.getElementById('save-btn').addEventListener('click',saveScore);
     document.getElementById('player-name').addEventListener('keydown',e=>{if(e.key==='Enter')saveScore();});
