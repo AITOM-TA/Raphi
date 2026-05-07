@@ -370,6 +370,7 @@
     let myShips = [], pendingIdx = 0, horizontal = true, hover = null;
     let confirmed = false, myTurn = false, phase = 'lobby';
     let mobilePreview = null;
+    let prevIncomingCount = 0;
 
     // ── Utils ─────────────────────────────────────────────────
     function cells(ship) {
@@ -583,12 +584,83 @@
       latestRoom = room;
       if (room.phase==='placement'&&phase==='waiting') { initPlacement(); return; }
       if (room.phase==='battle'&&phase!=='battle'&&phase!=='gameover') {
+        const opp0=myRole==='p1'?'p2':'p1';
+        prevIncomingCount=(room.shots&&room.shots[opp0]||[]).length;
         myTurn=room.turn===myRole; showScreen('battle'); renderBattle(); return;
       }
       if (phase==='battle') {
+        const opp=myRole==='p1'?'p2':'p1';
+        const incoming=room.shots?(room.shots[opp]||[]):[];
+        if (incoming.length > prevIncomingCount) {
+          prevIncomingCount=incoming.length;
+          const myShipData=myRole==='p1'?room.p1_ships:room.p2_ships;
+          const [lx,ly]=incoming[incoming.length-1];
+          const prev=incoming.slice(0,-1);
+          const nowSunk=myShipData&&myShipData.some(s=>!sunk(s,prev)&&sunk(s,incoming));
+          if (nowSunk) playSunk(); else if (hit(lx,ly,myShipData)) playHit(); else playSplash();
+        }
         myTurn=room.turn===myRole; renderBattle();
         if (room.phase==='done') { phase='gameover'; setTimeout(()=>showGameOver(room.winner),700); }
       }
+    }
+
+    // ── Audio ─────────────────────────────────────────────────
+    let _ac = null;
+    function getAC() {
+      if (!_ac) _ac = new (window.AudioContext||window.webkitAudioContext)();
+      if (_ac.state==='suspended') _ac.resume();
+      return _ac;
+    }
+    function playSplash() {
+      try {
+        const ctx=getAC(), now=ctx.currentTime, dur=0.55;
+        const buf=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*dur),ctx.sampleRate);
+        const d=buf.getChannelData(0);
+        for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/ctx.sampleRate*9);
+        const src=ctx.createBufferSource(); src.buffer=buf;
+        const bpf=ctx.createBiquadFilter(); bpf.type='bandpass'; bpf.Q.value=1.0;
+        bpf.frequency.setValueAtTime(1000,now);
+        bpf.frequency.exponentialRampToValueAtTime(200,now+dur);
+        const g=ctx.createGain(); g.gain.setValueAtTime(0.45,now); g.gain.exponentialRampToValueAtTime(0.001,now+dur);
+        src.connect(bpf); bpf.connect(g); g.connect(ctx.destination); src.start(now);
+      } catch(e){}
+    }
+    function playHit() {
+      try {
+        const ctx=getAC(), now=ctx.currentTime;
+        const osc=ctx.createOscillator(); osc.type='sawtooth';
+        osc.frequency.setValueAtTime(120,now); osc.frequency.exponentialRampToValueAtTime(28,now+0.55);
+        const og=ctx.createGain(); og.gain.setValueAtTime(0.8,now); og.gain.exponentialRampToValueAtTime(0.001,now+0.55);
+        osc.connect(og); og.connect(ctx.destination); osc.start(now); osc.stop(now+0.55);
+        const dur=0.42, buf=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*dur),ctx.sampleRate);
+        const d=buf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+        const noise=ctx.createBufferSource(); noise.buffer=buf;
+        const lpf=ctx.createBiquadFilter(); lpf.type='lowpass'; lpf.frequency.value=700;
+        const ng=ctx.createGain(); ng.gain.setValueAtTime(0.5,now); ng.gain.exponentialRampToValueAtTime(0.001,now+dur);
+        noise.connect(lpf); lpf.connect(ng); ng.connect(ctx.destination); noise.start(now);
+      } catch(e){}
+    }
+    function playSunk() {
+      try {
+        const ctx=getAC(), now=ctx.currentTime;
+        const osc=ctx.createOscillator(); osc.type='sawtooth';
+        osc.frequency.setValueAtTime(70,now); osc.frequency.exponentialRampToValueAtTime(15,now+0.9);
+        const og=ctx.createGain(); og.gain.setValueAtTime(1.0,now); og.gain.exponentialRampToValueAtTime(0.001,now+0.9);
+        osc.connect(og); og.connect(ctx.destination); osc.start(now); osc.stop(now+0.9);
+        const dur1=0.65, b1=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*dur1),ctx.sampleRate);
+        const d1=b1.getChannelData(0); for(let i=0;i<d1.length;i++) d1[i]=Math.random()*2-1;
+        const n1=ctx.createBufferSource(); n1.buffer=b1;
+        const lpf=ctx.createBiquadFilter(); lpf.type='lowpass'; lpf.frequency.value=600;
+        const g1=ctx.createGain(); g1.gain.setValueAtTime(0.65,now); g1.gain.exponentialRampToValueAtTime(0.001,now+dur1);
+        n1.connect(lpf); lpf.connect(g1); g1.connect(ctx.destination); n1.start(now);
+        const dur2=1.3, b2=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*dur2),ctx.sampleRate);
+        const d2=b2.getChannelData(0);
+        for(let i=0;i<d2.length;i++){const t=i/ctx.sampleRate; d2[i]=(Math.random()*2-1)*Math.abs(Math.sin(t*22+Math.sin(t*7)*4));}
+        const n2=ctx.createBufferSource(); n2.buffer=b2;
+        const bpf=ctx.createBiquadFilter(); bpf.type='bandpass'; bpf.frequency.value=320; bpf.Q.value=2.5;
+        const g2=ctx.createGain(); g2.gain.setValueAtTime(0.001,now+0.45); g2.gain.linearRampToValueAtTime(0.45,now+0.7); g2.gain.exponentialRampToValueAtTime(0.001,now+1.75);
+        n2.connect(bpf); bpf.connect(g2); g2.connect(ctx.destination); n2.start(now+0.45);
+      } catch(e){}
     }
 
     // ── Placement ─────────────────────────────────────────────
@@ -641,6 +713,8 @@
       const oppShips=myRole==='p1'?latestRoom.p2_ships:latestRoom.p1_ships;
       const newShots=[...myShots,[x,y]];
       const allSunk=oppShips&&oppShips.every(s=>sunk(s,newShots));
+      const newlySunk=oppShips&&oppShips.some(s=>!sunk(s,myShots)&&sunk(s,newShots));
+      if (newlySunk) playSunk(); else if (hit(x,y,oppShips)) playHit(); else playSplash();
       myTurn=false;
       const upd={shots:{...latestRoom.shots,[myRole]:newShots},turn:opp};
       if (allSunk){upd.phase='done';upd.winner=myRole;}
