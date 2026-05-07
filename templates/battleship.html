@@ -326,12 +326,14 @@
       return (c>=0&&c<10&&r>=0&&r<10) ? {x:c,y:r} : null;
     }
     function canvasPos(e, canvas) {
-      const rect = canvas.getBoundingClientRect();
+      const rect  = canvas.getBoundingClientRect();
       const scaleX = canvas.width  / rect.width;
       const scaleY = canvas.height / rect.height;
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      return { px: (clientX - rect.left) * scaleX, py: (clientY - rect.top) * scaleY };
+      // changedTouches[0] on touchend (touches is empty when finger lifts)
+      const t = (e.changedTouches && e.changedTouches[0])
+             || (e.touches        && e.touches[0])
+             || e;
+      return { px: (t.clientX - rect.left) * scaleX, py: (t.clientY - rect.top) * scaleY };
     }
 
     // ── Canvas helpers ────────────────────────────────────────
@@ -613,6 +615,10 @@
       const c=px2cell(e.clientX-r.left,e.clientY-r.top); if(c)placeShip(c.x,c.y);
     });
     placeC.addEventListener('contextmenu', e=>{e.preventDefault();horizontal=!horizontal;renderPlacement();});
+    placeC.addEventListener('touchstart', e=>{
+      e.preventDefault();
+      const {px,py}=canvasPos(e,placeC); hover=px2cell(px,py); renderPlacement();
+    },{passive:false});
     placeC.addEventListener('touchmove', e=>{
       e.preventDefault();
       const {px,py}=canvasPos(e,placeC); hover=px2cell(px,py); renderPlacement();
