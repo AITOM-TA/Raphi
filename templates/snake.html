@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Snake — Raphi</title>
+  <title>Snake — Rabargo</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -16,47 +16,49 @@
       min-height: 100vh;
       font-family: 'Courier New', monospace;
       color: #fff;
+      padding: 16px;
     }
 
     .back {
       position: fixed;
-      top: 20px;
-      left: 20px;
+      top: 16px;
+      left: 16px;
       color: #555;
       text-decoration: none;
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       letter-spacing: 0.15em;
       transition: color 0.15s;
+      z-index: 10;
     }
     .back:hover { color: #4ade80; }
 
     h1 {
-      font-size: 2.5rem;
+      font-size: clamp(1.6rem, 6vw, 2.5rem);
       letter-spacing: 0.3em;
       color: #4ade80;
       text-shadow: 0 0 20px #4ade8088;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
 
     #scoreboard {
       display: flex;
-      gap: 40px;
-      margin-bottom: 16px;
-      font-size: 1rem;
+      gap: 32px;
+      margin-bottom: 14px;
+      font-size: 0.9rem;
       letter-spacing: 0.1em;
       color: #aaa;
     }
-
-    #scoreboard span { color: #4ade80; font-size: 1.2rem; font-weight: bold; }
+    #scoreboard span { color: #4ade80; font-size: 1.1rem; font-weight: bold; }
 
     #game-wrapper {
       position: relative;
       border: 2px solid #4ade8044;
       border-radius: 4px;
       box-shadow: 0 0 40px #4ade8022;
+      max-width: 100%;
     }
 
-    canvas { display: block; }
+    canvas { display: block; max-width: 100%; }
 
     #overlay {
       position: absolute;
@@ -65,22 +67,22 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      background: rgba(0, 0, 0, 0.82);
+      background: rgba(0,0,0,0.82);
       border-radius: 4px;
-      gap: 16px;
+      gap: 14px;
+      padding: 20px;
     }
 
     #overlay h2 {
-      font-size: 2rem;
+      font-size: clamp(1.4rem, 5vw, 2rem);
       color: #4ade80;
       text-shadow: 0 0 16px #4ade80;
       letter-spacing: 0.2em;
     }
-
-    #overlay p { color: #aaa; font-size: 0.95rem; letter-spacing: 0.05em; }
+    #overlay p { color: #aaa; font-size: 0.85rem; letter-spacing: 0.05em; text-align: center; }
 
     #overlay button {
-      margin-top: 8px;
+      margin-top: 6px;
       padding: 12px 36px;
       background: transparent;
       border: 2px solid #4ade80;
@@ -92,23 +94,54 @@
       border-radius: 2px;
       transition: background 0.15s, color 0.15s;
     }
+    #overlay button:hover, #overlay button:active { background: #4ade80; color: #0a0a0a; }
 
-    #overlay button:hover {
-      background: #4ade80;
-      color: #0a0a0a;
-    }
-
-    #controls {
-      margin-top: 16px;
+    #kb-hint {
+      margin-top: 12px;
       color: #555;
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       letter-spacing: 0.08em;
       text-align: center;
+    }
+
+    /* ── D-pad (mobile) ───────────────────── */
+    #dpad {
+      display: none;
+      margin-top: 20px;
+      grid-template-columns: repeat(3, 56px);
+      grid-template-rows: repeat(3, 56px);
+      gap: 6px;
+    }
+
+    .dp {
+      background: #111;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      color: #4ade80;
+      font-size: 1.4rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.1s;
+    }
+    .dp:active { background: #1a2a1a; }
+    .dp-up    { grid-column: 2; grid-row: 1; }
+    .dp-left  { grid-column: 1; grid-row: 2; }
+    .dp-mid   { grid-column: 2; grid-row: 2; background: transparent; border-color: transparent; }
+    .dp-right { grid-column: 3; grid-row: 2; }
+    .dp-down  { grid-column: 2; grid-row: 3; }
+
+    @media (max-width: 600px), (pointer: coarse) {
+      #dpad { display: grid; }
+      #kb-hint { display: none; }
     }
   </style>
 </head>
 <body>
-  <a class="back" href="/">← RAPHI</a>
+  <a class="back" href="/">← RABARGO</a>
 
   <h1>SNAKE</h1>
 
@@ -121,40 +154,48 @@
     <canvas id="canvas"></canvas>
     <div id="overlay">
       <h2 id="overlay-title">SNAKE</h2>
-      <p id="overlay-msg">Utilise les flèches ou WASD pour jouer</p>
+      <p id="overlay-msg">Utilise les flèches, WASD ou le D-pad</p>
       <button id="start-btn">JOUER</button>
     </div>
   </div>
 
-  <div id="controls">↑ ↓ ← →&nbsp; ou &nbsp;W A S D</div>
+  <div id="kb-hint">↑ ↓ ← →&nbsp; ou &nbsp;W A S D</div>
+
+  <div id="dpad">
+    <button class="dp dp-up"    id="dp-up">▲</button>
+    <button class="dp dp-left"  id="dp-left">◀</button>
+    <div    class="dp dp-mid"></div>
+    <button class="dp dp-right" id="dp-right">▶</button>
+    <button class="dp dp-down"  id="dp-down">▼</button>
+  </div>
 
   <script>
-    const COLS = 25;
-    const ROWS = 25;
-    const CELL = 22;
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
-    canvas.width = COLS * CELL;
-    canvas.height = ROWS * CELL;
+    const COLS = 25, ROWS = 25;
+    const canvas = document.getElementById('canvas');
+    const ctx    = canvas.getContext('2d');
 
-    const scoreEl = document.getElementById("score");
-    const bestEl = document.getElementById("best");
-    const overlay = document.getElementById("overlay");
-    const overlayTitle = document.getElementById("overlay-title");
-    const overlayMsg = document.getElementById("overlay-msg");
-    const startBtn = document.getElementById("start-btn");
+    let CELL;
+    function calcCell() {
+      CELL = Math.max(12, Math.floor(Math.min(window.innerWidth - 32, 550) / COLS));
+      canvas.width  = COLS * CELL;
+      canvas.height = ROWS * CELL;
+    }
+    calcCell();
+
+    const scoreEl      = document.getElementById('score');
+    const bestEl       = document.getElementById('best');
+    const overlay      = document.getElementById('overlay');
+    const overlayTitle = document.getElementById('overlay-title');
+    const overlayMsg   = document.getElementById('overlay-msg');
+    const startBtn     = document.getElementById('start-btn');
 
     let snake, dir, nextDir, food, score, best = 0, running = false, loop;
 
     function init() {
-      snake = [
-        { x: 12, y: 12 },
-        { x: 11, y: 12 },
-        { x: 10, y: 12 },
-      ];
-      dir = { x: 1, y: 0 };
-      nextDir = { x: 1, y: 0 };
-      score = 0;
+      snake   = [{ x:12,y:12 }, { x:11,y:12 }, { x:10,y:12 }];
+      dir     = { x:1, y:0 };
+      nextDir = { x:1, y:0 };
+      score   = 0;
       scoreEl.textContent = 0;
       placeFood();
     }
@@ -162,10 +203,7 @@
     function placeFood() {
       let pos;
       do {
-        pos = {
-          x: Math.floor(Math.random() * COLS),
-          y: Math.floor(Math.random() * ROWS),
-        };
+        pos = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) };
       } while (snake.some(s => s.x === pos.x && s.y === pos.y));
       food = pos;
     }
@@ -173,16 +211,9 @@
     function step() {
       dir = nextDir;
       const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
-
-      if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
-        return gameOver();
-      }
-      if (snake.some(s => s.x === head.x && s.y === head.y)) {
-        return gameOver();
-      }
-
+      if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) return gameOver();
+      if (snake.some(s => s.x === head.x && s.y === head.y)) return gameOver();
       snake.unshift(head);
-
       if (head.x === food.x && head.y === food.y) {
         score++;
         scoreEl.textContent = score;
@@ -191,42 +222,36 @@
       } else {
         snake.pop();
       }
-
       draw();
     }
 
     function draw() {
-      ctx.fillStyle = "#0f0f0f";
+      ctx.fillStyle = '#0f0f0f';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      ctx.strokeStyle = "#1a1a1a";
+      ctx.strokeStyle = '#1a1a1a';
       ctx.lineWidth = 0.5;
       for (let x = 0; x <= COLS; x++) {
-        ctx.beginPath(); ctx.moveTo(x * CELL, 0); ctx.lineTo(x * CELL, canvas.height); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x*CELL,0); ctx.lineTo(x*CELL,canvas.height); ctx.stroke();
       }
       for (let y = 0; y <= ROWS; y++) {
-        ctx.beginPath(); ctx.moveTo(0, y * CELL); ctx.lineTo(canvas.width, y * CELL); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,y*CELL); ctx.lineTo(canvas.width,y*CELL); ctx.stroke();
       }
 
-      const fx = food.x * CELL + CELL / 2;
-      const fy = food.y * CELL + CELL / 2;
-      ctx.fillStyle = "#f87171";
-      ctx.shadowColor = "#f87171";
-      ctx.shadowBlur = 12;
-      ctx.beginPath();
-      ctx.arc(fx, fy, CELL / 2 - 3, 0, Math.PI * 2);
-      ctx.fill();
+      const fx = food.x * CELL + CELL/2, fy = food.y * CELL + CELL/2;
+      ctx.fillStyle = '#f87171'; ctx.shadowColor = '#f87171'; ctx.shadowBlur = 12;
+      ctx.beginPath(); ctx.arc(fx, fy, CELL/2 - Math.max(2, CELL*0.12), 0, Math.PI*2); ctx.fill();
       ctx.shadowBlur = 0;
 
       snake.forEach((seg, i) => {
-        const t = i / snake.length;
+        const t     = i / snake.length;
         const green = Math.floor(222 - t * 80);
-        ctx.fillStyle = `rgb(74, ${green}, 128)`;
-        ctx.shadowColor = i === 0 ? "#4ade80" : "transparent";
-        ctx.shadowBlur = i === 0 ? 10 : 0;
+        ctx.fillStyle  = `rgb(74,${green},128)`;
+        ctx.shadowColor = i === 0 ? '#4ade80' : 'transparent';
+        ctx.shadowBlur  = i === 0 ? 8 : 0;
         const pad = i === 0 ? 1 : 2;
         ctx.beginPath();
-        ctx.roundRect(seg.x * CELL + pad, seg.y * CELL + pad, CELL - pad * 2, CELL - pad * 2, i === 0 ? 4 : 3);
+        ctx.roundRect(seg.x*CELL+pad, seg.y*CELL+pad, CELL-pad*2, CELL-pad*2, i===0?4:3);
         ctx.fill();
       });
       ctx.shadowBlur = 0;
@@ -235,51 +260,73 @@
     function gameOver() {
       clearInterval(loop);
       running = false;
-      overlayTitle.textContent = "GAME OVER";
-      overlayMsg.textContent = `Score : ${score}`;
-      startBtn.textContent = "REJOUER";
-      overlay.style.display = "flex";
+      overlayTitle.textContent = 'GAME OVER';
+      overlayMsg.textContent   = `Score : ${score}`;
+      startBtn.textContent     = 'REJOUER';
+      overlay.style.display    = 'flex';
     }
 
     function startGame() {
+      calcCell();
       init();
-      overlay.style.display = "none";
+      overlay.style.display = 'none';
       running = true;
-      loop = setInterval(step, 130);
+      loop    = setInterval(step, 130);
       draw();
     }
 
-    startBtn.addEventListener("click", startGame);
+    startBtn.addEventListener('click', startGame);
 
-    document.addEventListener("keydown", e => {
-      const map = {
-        ArrowUp: { x: 0, y: -1 }, ArrowDown: { x: 0, y: 1 },
-        ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 },
-        w: { x: 0, y: -1 }, s: { x: 0, y: 1 },
-        a: { x: -1, y: 0 }, d: { x: 1, y: 0 },
-      };
-      const newDir = map[e.key];
-      if (!newDir) return;
-      if (newDir.x !== -dir.x || newDir.y !== -dir.y) nextDir = newDir;
-      if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)) e.preventDefault();
+    // ── Keyboard ──────────────────────────
+    const keyMap = {
+      ArrowUp:    {x:0,y:-1}, ArrowDown:  {x:0,y:1},
+      ArrowLeft:  {x:-1,y:0}, ArrowRight: {x:1,y:0},
+      w:{x:0,y:-1}, s:{x:0,y:1}, a:{x:-1,y:0}, d:{x:1,y:0},
+    };
+    document.addEventListener('keydown', e => {
+      const nd = keyMap[e.key];
+      if (!nd) return;
+      if (nd.x !== -dir.x || nd.y !== -dir.y) nextDir = nd;
+      if (e.key.startsWith('Arrow')) e.preventDefault();
     });
 
+    // ── D-pad ─────────────────────────────
+    function applyDir(nd) {
+      if (!running) return;
+      if (nd.x !== -dir.x || nd.y !== -dir.y) nextDir = nd;
+    }
+    document.getElementById('dp-up').addEventListener('touchstart',    e => { e.preventDefault(); applyDir({x:0,y:-1}); }, {passive:false});
+    document.getElementById('dp-down').addEventListener('touchstart',  e => { e.preventDefault(); applyDir({x:0,y:1});  }, {passive:false});
+    document.getElementById('dp-left').addEventListener('touchstart',  e => { e.preventDefault(); applyDir({x:-1,y:0}); }, {passive:false});
+    document.getElementById('dp-right').addEventListener('touchstart', e => { e.preventDefault(); applyDir({x:1,y:0});  }, {passive:false});
+
+    // ── Touch swipe ───────────────────────
     let touchStart = null;
-    canvas.addEventListener("touchstart", e => {
+    canvas.addEventListener('touchstart', e => {
       touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     }, { passive: true });
-    canvas.addEventListener("touchend", e => {
+    canvas.addEventListener('touchend', e => {
       if (!touchStart || !running) return;
       const dx = e.changedTouches[0].clientX - touchStart.x;
       const dy = e.changedTouches[0].clientY - touchStart.y;
       if (Math.abs(dx) > Math.abs(dy)) {
-        const nd = dx > 0 ? { x: 1, y: 0 } : { x: -1, y: 0 };
+        const nd = dx > 0 ? {x:1,y:0} : {x:-1,y:0};
         if (nd.x !== -dir.x) nextDir = nd;
       } else {
-        const nd = dy > 0 ? { x: 0, y: 1 } : { x: 0, y: -1 };
+        const nd = dy > 0 ? {x:0,y:1} : {x:0,y:-1};
         if (nd.y !== -dir.y) nextDir = nd;
       }
     }, { passive: true });
+
+    // ── Resize ────────────────────────────
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        calcCell();
+        if (!running && food) draw();
+      }, 150);
+    });
   </script>
 </body>
 </html>
