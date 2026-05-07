@@ -23,6 +23,16 @@ def battleship():
     return render_template("battleship.html")
 
 
+@app.route("/space-invaders")
+def space_invaders():
+    return render_template("space-invaders.html")
+
+
+@app.route("/breakout")
+def breakout():
+    return render_template("breakout.html")
+
+
 if __name__ == "__main__":
     import os
     port = int(os.environ.get("PORT", 5000))

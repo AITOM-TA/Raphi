@@ -121,6 +121,14 @@
     .card.battleship::before { background: radial-gradient(ellipse at top, #f59e0b11, transparent 70%); }
     .card.battleship:hover  { border-color: #f59e0baa; box-shadow: 0 0 40px #f59e0b33, 0 20px 40px #0008; }
 
+    .card.invaders        { border-color: #ef444433; }
+    .card.invaders::before { background: radial-gradient(ellipse at top, #ef444411, transparent 70%); }
+    .card.invaders:hover  { border-color: #ef4444aa; box-shadow: 0 0 40px #ef444433, 0 20px 40px #0008; }
+
+    .card.breakout        { border-color: #a855f733; }
+    .card.breakout::before { background: radial-gradient(ellipse at top, #a855f711, transparent 70%); }
+    .card.breakout:hover  { border-color: #a855f7aa; box-shadow: 0 0 40px #a855f733, 0 20px 40px #0008; }
+
     .card-icon  { font-size: 2.8rem; line-height: 1; }
 
     .card-title {
@@ -133,6 +141,8 @@
     .card.snake .card-title       { color: #4ade80; }
     .card.tetris .card-title      { color: #60a5fa; }
     .card.battleship .card-title  { color: #f59e0b; }
+    .card.invaders .card-title    { color: #ef4444; }
+    .card.breakout .card-title    { color: #a855f7; }
 
     .card-desc {
       font-size: 0.74rem;
@@ -158,6 +168,8 @@
     .card.snake .card-cta       { background: #4ade80; color: #0a0a0a; }
     .card.tetris .card-cta      { background: #60a5fa; color: #0a0a0a; }
     .card.battleship .card-cta  { background: #f59e0b; color: #0a0a0a; }
+    .card.invaders .card-cta    { background: #ef4444; color: #fff; }
+    .card.breakout .card-cta    { background: #a855f7; color: #fff; }
     .card-cta:hover { opacity: 0.85; }
 
     .footer {
@@ -222,6 +234,24 @@
       <div class="card-body">
         <div class="card-title">Bataille Navale</div>
         <div class="card-desc">1v1 en temps réel avec un ami.<br>Coule sa flotte avant lui !</div>
+      </div>
+      <button class="card-cta">JOUER</button>
+    </a>
+
+    <a class="card invaders" href="/space-invaders">
+      <div class="card-icon">👾</div>
+      <div class="card-body">
+        <div class="card-title">Space Invaders</div>
+        <div class="card-desc">Défends la Terre des envahisseurs.<br>Vise juste, tire vite !</div>
+      </div>
+      <button class="card-cta">JOUER</button>
+    </a>
+
+    <a class="card breakout" href="/breakout">
+      <div class="card-icon">🧱</div>
+      <div class="card-body">
+        <div class="card-title">Casse-Briques</div>
+        <div class="card-desc">Brise tous les blocs sans laisser<br>tomber la balle !</div>
       </div>
       <button class="card-cta">JOUER</button>
     </a>
