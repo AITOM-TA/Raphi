@@ -133,6 +133,12 @@
 
     .card.snake .card-title { color: #4ade80; }
     .card.tetris .card-title { color: #60a5fa; }
+    .card.battleship .card-title { color: #f59e0b; }
+
+    /* Battleship card */
+    .card.battleship { border-color: #f59e0b33; }
+    .card.battleship::before { background: radial-gradient(ellipse at top, #f59e0b11, transparent 70%); }
+    .card.battleship:hover { border-color: #f59e0baa; box-shadow: 0 0 40px #f59e0b33, 0 20px 40px #0008; }
 
     .card-desc {
       font-size: 0.78rem;
@@ -157,6 +163,7 @@
 
     .card.snake .card-cta { background: #4ade80; color: #0a0a0a; }
     .card.tetris .card-cta { background: #60a5fa; color: #0a0a0a; }
+    .card.battleship .card-cta { background: #f59e0b; color: #0a0a0a; }
     .card-cta:hover { opacity: 0.85; }
 
     .footer {
@@ -188,6 +195,13 @@
       <div class="card-icon">🟦</div>
       <div class="card-title">Tetris</div>
       <div class="card-desc">Empile les pièces, complète les lignes.<br>Jusqu'où iras-tu ?</div>
+      <button class="card-cta">JOUER</button>
+    </a>
+
+    <a class="card battleship" href="/battleship">
+      <div class="card-icon">⚓</div>
+      <div class="card-title">Bataille Navale</div>
+      <div class="card-desc">1v1 en temps réel avec un ami.<br>Coule sa flotte avant lui !</div>
       <button class="card-cta">JOUER</button>
     </a>
   </div>

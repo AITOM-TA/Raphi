@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bataille Navale — Raphi</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0a0a;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Courier New', monospace;
+      color: #fff;
+    }
+
+    .back {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      color: #555;
+      text-decoration: none;
+      font-size: 0.8rem;
+      letter-spacing: 0.15em;
+      transition: color 0.15s;
+      z-index: 10;
+    }
+    .back:hover { color: #f59e0b; }
+
+    /* ── Screens ─────────────────────────── */
+    .screen { display: none; flex-direction: column; align-items: center; gap: 24px; padding: 20px; }
+    .screen.active { display: flex; }
+
+    h1 {
+      font-size: 2rem;
+      letter-spacing: 0.3em;
+      color: #f59e0b;
+      text-shadow: 0 0 20px #f59e0b88;
+    }
+
+    h2 {
+      font-size: 1rem;
+      letter-spacing: 0.25em;
+      color: #f59e0b;
+      text-shadow: 0 0 10px #f59e0b66;
+    }
+
+    /* ── Buttons ─────────────────────────── */
+    .btn {
+      padding: 12px 32px;
+      background: transparent;
+      border: 2px solid #f59e0b;
+      color: #f59e0b;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9rem;
+      letter-spacing: 0.2em;
+      cursor: pointer;
+      border-radius: 3px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .btn:hover:not(:disabled) { background: #f59e0b; color: #0a0a0a; }
+    .btn:disabled { opacity: 0.3; cursor: default; }
+
+    .btn-sm { padding: 9px 20px; font-size: 0.78rem; }
+
+    .btn-ghost {
+      border-color: #333;
+      color: #666;
+    }
+    .btn-ghost:hover:not(:disabled) { background: #333; color: #aaa; }
+
+    /* ── Lobby ───────────────────────────── */
+    .lobby-card {
+      border: 1px solid #1e1e1e;
+      border-radius: 10px;
+      padding: 36px 44px;
+      background: #0f0f0f;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 22px;
+      min-width: 320px;
+    }
+
+    .sep { color: #333; font-size: 0.75rem; letter-spacing: 0.25em; }
+
+    .join-row { display: flex; gap: 10px; }
+
+    input[type="text"] {
+      background: #0a0a0a;
+      border: 1px solid #2a2a2a;
+      color: #fff;
+      font-family: 'Courier New', monospace;
+      font-size: 1.1rem;
+      padding: 10px 14px;
+      border-radius: 3px;
+      letter-spacing: 0.3em;
+      width: 120px;
+      text-transform: uppercase;
+      text-align: center;
+    }
+    input[type="text"]::placeholder { letter-spacing: 0.2em; color: #333; font-size: 0.9rem; }
+    input[type="text"]:focus { outline: none; border-color: #f59e0b66; }
+
+    /* ── Waiting ─────────────────────────── */
+    .code-display {
+      font-size: 4rem;
+      font-weight: 900;
+      letter-spacing: 0.5em;
+      color: #f59e0b;
+      text-shadow: 0 0 40px #f59e0b88;
+      padding-right: 0.5em;
+    }
+
+    .link-box {
+      border: 1px solid #1e1e1e;
+      border-radius: 6px;
+      padding: 14px 16px;
+      background: #0f0f0f;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      max-width: 480px;
+      width: 100%;
+    }
+    #share-url { flex: 1; color: #555; font-size: 0.75rem; word-break: break-all; }
+
+    .spinner {
+      width: 28px; height: 28px;
+      border: 3px solid #1e1e1e;
+      border-top-color: #f59e0b;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .muted { color: #555; font-size: 0.78rem; letter-spacing: 0.1em; }
+
+    /* ── Placement ───────────────────────── */
+    .placement-layout { display: flex; gap: 28px; align-items: flex-start; }
+
+    .ships-panel {
+      width: 190px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .panel-title { font-size: 0.62rem; letter-spacing: 0.22em; color: #444; text-transform: uppercase; margin-bottom: 4px; }
+
+    .ship-item {
+      border: 1px solid #181818;
+      border-radius: 5px;
+      padding: 10px 12px;
+      background: #0d0d0d;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .ship-item.active  { border-color: #f59e0b66; background: #140e00; }
+    .ship-item.placed  { opacity: 0.45; }
+
+    .ship-name  { font-size: 0.72rem; color: #888; }
+    .ship-cells { color: #f59e0b; font-size: 0.95rem; letter-spacing: 0.08em; }
+    .ship-item.placed .ship-cells { color: #3a3a3a; }
+    .ship-st    { font-size: 0.62rem; color: #444; }
+    .ship-item.active .ship-st  { color: #f59e0b; }
+    .ship-item.placed .ship-st  { color: #4ade80; }
+
+    .placement-btns { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+
+    canvas { display: block; }
+
+    /* ── Battle ──────────────────────────── */
+    .turn-bar {
+      border: 1px solid #222;
+      border-radius: 4px;
+      padding: 10px 28px;
+      font-size: 0.82rem;
+      letter-spacing: 0.18em;
+      text-align: center;
+      min-width: 280px;
+    }
+    .turn-bar.mine { border-color: #f59e0b66; color: #f59e0b; background: #14100000; }
+    .turn-bar.opp  { color: #444; }
+
+    .battle-layout  { display: flex; gap: 36px; align-items: flex-start; }
+    .board-col      { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    .board-lbl      { font-size: 0.62rem; letter-spacing: 0.28em; color: #444; text-transform: uppercase; }
+    .board-score    { font-size: 0.72rem; color: #666; letter-spacing: 0.1em; }
+
+    /* ── Game over ───────────────────────── */
+    .result {
+      font-size: 2.8rem;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+    }
+  </style>
+</head>
+<body>
+  <a class="back" href="/">← RAPHI</a>
+
+  <!-- ═══════ LOBBY ═══════ -->
+  <div id="screen-lobby" class="screen active">
+    <h1>BATAILLE NAVALE</h1>
+    <div class="lobby-card">
+      <button class="btn" id="btn-create">Créer une partie</button>
+      <div class="sep">— ou —</div>
+      <div class="join-row">
+        <input id="room-input" type="text" placeholder="CODE" maxlength="4" />
+        <button class="btn btn-sm" id="btn-join">Rejoindre</button>
+      </div>
+      <p class="muted" id="lobby-err" style="color:#f87171;display:none"></p>
+    </div>
+  </div>
+
+  <!-- ═══════ WAITING ═══════ -->
+  <div id="screen-waiting" class="screen">
+    <h1>BATAILLE NAVALE</h1>
+    <p class="muted">Envoie ce code à ton adversaire</p>
+    <div class="code-display" id="code-display">——</div>
+    <div class="link-box">
+      <span id="share-url"></span>
+      <button class="btn btn-sm" id="btn-copy">Copier</button>
+    </div>
+    <div class="spinner"></div>
+    <p class="muted">En attente de l'adversaire…</p>
+  </div>
+
+  <!-- ═══════ PLACEMENT ═══════ -->
+  <div id="screen-placement" class="screen">
+    <h2>PLACEMENT DES NAVIRES</h2>
+    <div class="placement-layout">
+      <div class="ships-panel">
+        <div class="panel-title">Navires à placer</div>
+        <div id="ships-list"></div>
+        <div class="placement-btns">
+          <button class="btn btn-sm btn-ghost" id="btn-rotate">↻ Rotation&nbsp;(R)</button>
+          <button class="btn btn-sm btn-ghost" id="btn-undo">← Défaire</button>
+        </div>
+        <button class="btn" id="btn-confirm" disabled style="margin-top:14px">Confirmer</button>
+        <p class="muted" id="place-status" style="margin-top:6px;text-align:center"></p>
+      </div>
+      <canvas id="place-canvas" style="cursor:crosshair;border-radius:4px"></canvas>
+    </div>
+  </div>
+
+  <!-- ═══════ BATTLE ═══════ -->
+  <div id="screen-battle" class="screen">
+    <h1>BATAILLE NAVALE</h1>
+    <div class="turn-bar" id="turn-bar">…</div>
+    <div class="battle-layout">
+      <div class="board-col">
+        <div class="board-lbl">Mon terrain</div>
+        <canvas id="my-canvas" style="border-radius:4px"></canvas>
+        <div class="board-score" id="my-score"></div>
+      </div>
+      <div class="board-col">
+        <div class="board-lbl">Adversaire</div>
+        <canvas id="enemy-canvas" style="cursor:crosshair;border-radius:4px"></canvas>
+        <div class="board-score" id="enemy-score"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ GAME OVER ═══════ -->
+  <div id="screen-gameover" class="screen">
+    <h1>BATAILLE NAVALE</h1>
+    <div class="result" id="go-result">VICTOIRE !</div>
+    <p class="muted" id="go-msg"></p>
+    <button class="btn" id="btn-replay" style="margin-top:8px">REJOUER</button>
+  </div>
+
+  <!-- Supabase SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script>
+    // ════════════════════════════════════════════════════════
+    //  CONFIGURATION SUPABASE  (injecté automatiquement)
+    // ════════════════════════════════════════════════════════
+    const SUPABASE_URL = 'SUPABASE_URL_PLACEHOLDER';
+    const SUPABASE_KEY = 'SUPABASE_ANON_KEY_PLACEHOLDER';
+    // ════════════════════════════════════════════════════════
+
+    const SHIPS_CFG = [
+      { name: 'Porte-avions', size: 5 },
+      { name: 'Croiseur',     size: 4 },
+      { name: 'Destroyer',    size: 3 },
+      { name: 'Sous-marin',   size: 3 },
+      { name: 'Torpilleur',   size: 2 },
+    ];
+
+    const CELL    = 34;
+    const OFFSET  = 22;
+    const BPX     = OFFSET + CELL * 10; // 362
+
+    // ── Supabase client ──────────────────────────────────────
+    const { createClient } = supabase;
+    const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // ── State ────────────────────────────────────────────────
+    let roomCh      = null;
+    let myRole      = null;       // 'p1' | 'p2'
+    let roomId      = null;
+    let latestRoom  = null;
+    let myShips     = [];
+    let pendingIdx  = 0;
+    let horizontal  = true;
+    let hover       = null;
+    let confirmed   = false;
+    let myTurn      = false;
+    let phase       = 'lobby';    // local UI phase
+
+    // ── Utils ────────────────────────────────────────────────
+    function cells(ship) {
+      const out = [];
+      for (let i = 0; i < ship.size; i++)
+        out.push(ship.h ? { x: ship.x + i, y: ship.y } : { x: ship.x, y: ship.y + i });
+      return out;
+    }
+
+    function canPlace(ship, placed) {
+      const cs = cells(ship);
+      for (const c of cs)
+        if (c.x < 0 || c.x >= 10 || c.y < 0 || c.y >= 10) return false;
+      for (const s of placed)
+        for (const c of cs)
+          if (cells(s).some(e => e.x === c.x && e.y === c.y)) return false;
+      return true;
+    }
+
+    function hit(x, y, ships) {
+      return ships && ships.some(s => cells(s).some(c => c.x === x && c.y === y));
+    }
+
+    function sunk(ship, shots) {
+      return cells(ship).every(c => shots.some(([sx, sy]) => sx === c.x && sy === c.y));
+    }
+
+    function sunken(ships, shots) {
+      if (!ships || !shots) return 0;
+      return ships.filter(s => sunk(s, shots)).length;
+    }
+
+    function randCode() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      return Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    }
+
+    function px2cell(px, py) {
+      const c = Math.floor((px - OFFSET) / CELL);
+      const r = Math.floor((py - OFFSET) / CELL);
+      return (c >= 0 && c < 10 && r >= 0 && r < 10) ? { x: c, y: r } : null;
+    }
+
+    // ── Canvas helpers ───────────────────────────────────────
+    function drawBase(ctx) {
+      ctx.fillStyle = '#0c1220';
+      ctx.fillRect(0, 0, BPX, BPX);
+
+      ctx.fillStyle = '#2d4460';
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      for (let c = 0; c < 10; c++)
+        ctx.fillText(String.fromCharCode(65 + c), OFFSET + c * CELL + CELL / 2, OFFSET / 2);
+      ctx.textAlign = 'right';
+      for (let r = 0; r < 10; r++)
+        ctx.fillText(r + 1, OFFSET - 5, OFFSET + r * CELL + CELL / 2);
+
+      for (let r = 0; r < 10; r++)
+        for (let c = 0; c < 10; c++) {
+          ctx.fillStyle = (r + c) % 2 === 0 ? '#0e1826' : '#0c1a22';
+          ctx.fillRect(OFFSET + c * CELL, OFFSET + r * CELL, CELL, CELL);
+        }
+
+      ctx.strokeStyle = '#152030';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 10; i++) {
+        ctx.beginPath(); ctx.moveTo(OFFSET + i * CELL, OFFSET); ctx.lineTo(OFFSET + i * CELL, OFFSET + 10 * CELL); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(OFFSET, OFFSET + i * CELL); ctx.lineTo(OFFSET + 10 * CELL, OFFSET + i * CELL); ctx.stroke();
+      }
+    }
+
+    function drawShips(ctx, ships, incomingShots, visible) {
+      if (!visible || !ships) return;
+      for (const s of ships) {
+        const isSunk = incomingShots ? sunk(s, incomingShots) : false;
+        ctx.fillStyle    = isSunk ? '#6b2d00' : '#f59e0b';
+        ctx.shadowColor  = isSunk ? 'transparent' : '#f59e0b88';
+        ctx.shadowBlur   = isSunk ? 0 : 8;
+        for (const c of cells(s)) {
+          ctx.beginPath();
+          ctx.roundRect(OFFSET + c.x * CELL + 2, OFFSET + c.y * CELL + 2, CELL - 4, CELL - 4, 3);
+          ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+      }
+    }
+
+    function drawShot(ctx, x, y, isHit) {
+      const px = OFFSET + x * CELL + CELL / 2, py = OFFSET + y * CELL + CELL / 2;
+      if (isHit) {
+        ctx.fillStyle   = '#ef4444';
+        ctx.shadowColor = '#ef4444';
+        ctx.shadowBlur  = 10;
+        ctx.beginPath(); ctx.arc(px, py, CELL / 2 - 5, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur  = 0;
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+        ctx.lineWidth   = 2;
+        const m = 7;
+        ctx.beginPath(); ctx.moveTo(px - m, py - m); ctx.lineTo(px + m, py + m); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(px + m, py - m); ctx.lineTo(px - m, py + m); ctx.stroke();
+      } else {
+        ctx.fillStyle = '#1e3048';
+        ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    // ── Placement canvas ─────────────────────────────────────
+    function renderPlacement() {
+      const ctx = document.getElementById('place-canvas').getContext('2d');
+      drawBase(ctx);
+      drawShips(ctx, myShips, null, true);
+
+      if (hover && pendingIdx < SHIPS_CFG.length && !confirmed) {
+        const ghost = { ...SHIPS_CFG[pendingIdx], x: hover.x, y: hover.y, h: horizontal };
+        const valid = canPlace(ghost, myShips);
+        ctx.lineWidth = 1.5;
+        for (const c of cells(ghost)) {
+          if (c.x < 0 || c.x >= 10 || c.y < 0 || c.y >= 10) continue;
+          ctx.fillStyle   = valid ? '#f59e0b2a' : '#ef44442a';
+          ctx.strokeStyle = valid ? '#f59e0b'   : '#ef4444';
+          ctx.beginPath();
+          ctx.roundRect(OFFSET + c.x * CELL + 2, OFFSET + c.y * CELL + 2, CELL - 4, CELL - 4, 3);
+          ctx.fill(); ctx.stroke();
+        }
+      }
+    }
+
+    function updateShipsList() {
+      const list = document.getElementById('ships-list');
+      list.innerHTML = '';
+      SHIPS_CFG.forEach((cfg, i) => {
+        const placed = i < myShips.length;
+        const active = i === pendingIdx && !confirmed;
+        const div = document.createElement('div');
+        div.className = 'ship-item' + (active ? ' active' : '') + (placed ? ' placed' : '');
+        div.innerHTML = `<span class="ship-name">${cfg.name}</span>
+          <span class="ship-cells">${'■'.repeat(cfg.size)}</span>
+          <span class="ship-st">${placed ? '✓ Placé' : (active ? '→ À placer' : '—')}</span>`;
+        list.appendChild(div);
+      });
+    }
+
+    // ── Battle canvas ────────────────────────────────────────
+    function renderBattle() {
+      if (!latestRoom) return;
+      const opp        = myRole === 'p1' ? 'p2' : 'p1';
+      const myShipData = myRole === 'p1' ? latestRoom.p1_ships : latestRoom.p2_ships;
+      const oppShips   = myRole === 'p1' ? latestRoom.p2_ships : latestRoom.p1_ships;
+      const incoming   = latestRoom.shots[opp]     || [];
+      const myshots    = latestRoom.shots[myRole]  || [];
+
+      // My board
+      const mCtx = document.getElementById('my-canvas').getContext('2d');
+      drawBase(mCtx);
+      drawShips(mCtx, myShipData, incoming, true);
+      for (const [x, y] of incoming) drawShot(mCtx, x, y, hit(x, y, myShipData));
+
+      // Enemy board — show only sunk ships
+      const eCtx = document.getElementById('enemy-canvas').getContext('2d');
+      drawBase(eCtx);
+      if (oppShips) {
+        for (const s of oppShips) {
+          if (sunk(s, myshots)) {
+            eCtx.fillStyle = '#6b2d00';
+            for (const c of cells(s)) {
+              eCtx.beginPath();
+              eCtx.roundRect(OFFSET + c.x * CELL + 2, OFFSET + c.y * CELL + 2, CELL - 4, CELL - 4, 3);
+              eCtx.fill();
+            }
+          }
+        }
+      }
+      for (const [x, y] of myshots) drawShot(eCtx, x, y, hit(x, y, oppShips));
+
+      // Hover highlight on enemy canvas (when it's my turn)
+      if (myTurn && hover) {
+        const alreadyShot = myshots.some(([sx, sy]) => sx === hover.x && sy === hover.y);
+        if (!alreadyShot) {
+          eCtx.fillStyle   = '#f59e0b18';
+          eCtx.strokeStyle = '#f59e0b55';
+          eCtx.lineWidth   = 1;
+          eCtx.beginPath();
+          eCtx.roundRect(OFFSET + hover.x * CELL + 1, OFFSET + hover.y * CELL + 1, CELL - 2, CELL - 2, 2);
+          eCtx.fill(); eCtx.stroke();
+        }
+      }
+
+      // Scores
+      const sMe  = sunken(myShipData, incoming);
+      const sOpp = sunken(oppShips, myshots);
+      document.getElementById('my-score').textContent    = `${sMe}/5 coulés`;
+      document.getElementById('enemy-score').textContent = `${sOpp}/5 coulés`;
+
+      // Turn bar
+      const bar = document.getElementById('turn-bar');
+      bar.textContent = myTurn ? '⚡ À VOUS DE JOUER' : '⏳ ADVERSAIRE JOUE…';
+      bar.className   = 'turn-bar ' + (myTurn ? 'mine' : 'opp');
+    }
+
+    // ── Screens ──────────────────────────────────────────────
+    function showScreen(name) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById('screen-' + name).classList.add('active');
+      phase = name;
+    }
+
+    // ── Supabase: create ─────────────────────────────────────
+    async function createRoom() {
+      const code = randCode();
+      const { error } = await db.from('rooms').insert({
+        id: code, phase: 'waiting', shots: { p1: [], p2: [] },
+      });
+      if (error) { showErr('Erreur : ' + error.message); return; }
+
+      myRole = 'p1';
+      roomId = code;
+      document.getElementById('code-display').textContent = code;
+      const url = window.location.origin + '/battleship?room=' + code;
+      document.getElementById('share-url').textContent = url;
+      subscribeRoom(code);
+      showScreen('waiting');
+    }
+
+    // ── Supabase: join ───────────────────────────────────────
+    async function joinRoom(code) {
+      code = code.toUpperCase().trim();
+      if (code.length !== 4) { showErr('Code invalide (4 caractères)'); return; }
+
+      const { data, error } = await db.from('rooms').select('*').eq('id', code).single();
+      if (error || !data) { showErr('Partie introuvable'); return; }
+      if (data.phase !== 'waiting') { showErr('Cette partie a déjà commencé'); return; }
+
+      myRole     = 'p2';
+      roomId     = code;
+      latestRoom = data;
+
+      await db.from('rooms').update({ phase: 'placement' }).eq('id', code);
+      subscribeRoom(code);
+      initPlacement();
+    }
+
+    // ── Supabase: subscribe ──────────────────────────────────
+    function subscribeRoom(code) {
+      if (roomCh) { db.removeChannel(roomCh); }
+      roomCh = db.channel(`room-${code}`)
+        .on('postgres_changes', {
+          event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${code}`,
+        }, ({ new: room }) => onRoomUpdate(room))
+        .subscribe();
+    }
+
+    function onRoomUpdate(room) {
+      latestRoom = room;
+
+      if (room.phase === 'placement' && phase === 'waiting') {
+        initPlacement(); return;
+      }
+
+      if (room.phase === 'battle' && phase !== 'battle' && phase !== 'gameover') {
+        myTurn = room.turn === myRole;
+        showScreen('battle');
+        initBattleCanvases();
+        renderBattle(); return;
+      }
+
+      if (phase === 'battle') {
+        myTurn = room.turn === myRole;
+        renderBattle();
+        if (room.phase === 'done') {
+          phase = 'gameover';
+          setTimeout(() => showGameOver(room.winner), 700);
+        }
+      }
+    }
+
+    // ── Placement logic ──────────────────────────────────────
+    function initPlacement() {
+      myShips    = [];
+      pendingIdx = 0;
+      horizontal = true;
+      hover      = null;
+      confirmed  = false;
+      document.getElementById('btn-confirm').disabled = true;
+      document.getElementById('place-status').textContent = '';
+
+      const c = document.getElementById('place-canvas');
+      c.width = c.height = BPX;
+      updateShipsList();
+      renderPlacement();
+      showScreen('placement');
+    }
+
+    function placeShip(x, y) {
+      if (pendingIdx >= SHIPS_CFG.length || confirmed) return;
+      const ship = { ...SHIPS_CFG[pendingIdx], x, y, h: horizontal };
+      if (!canPlace(ship, myShips)) return;
+      myShips.push(ship);
+      pendingIdx++;
+      if (pendingIdx >= SHIPS_CFG.length)
+        document.getElementById('btn-confirm').disabled = false;
+      updateShipsList();
+      renderPlacement();
+    }
+
+    async function confirmPlacement() {
+      if (myShips.length < SHIPS_CFG.length) return;
+      confirmed = true;
+      document.getElementById('btn-confirm').disabled = true;
+      document.getElementById('place-status').textContent = 'En attente de l\'adversaire…';
+
+      const myKey  = myRole === 'p1' ? 'p1_ships' : 'p2_ships';
+      const oppKey = myRole === 'p1' ? 'p2_ships' : 'p1_ships';
+      const { data } = await db.from('rooms').select(oppKey).eq('id', roomId).single();
+      const upd = { [myKey]: myShips };
+      if (data && data[oppKey]) upd.phase = 'battle';
+      await db.from('rooms').update(upd).eq('id', roomId);
+    }
+
+    // ── Battle canvases ──────────────────────────────────────
+    function initBattleCanvases() {
+      ['my-canvas', 'enemy-canvas'].forEach(id => {
+        const c = document.getElementById(id);
+        c.width = c.height = BPX;
+      });
+    }
+
+    async function shoot(x, y) {
+      if (!myTurn || phase !== 'battle' || !latestRoom) return;
+      const myShots = latestRoom.shots[myRole] || [];
+      if (myShots.some(([sx, sy]) => sx === x && sy === y)) return;
+
+      const opp      = myRole === 'p1' ? 'p2' : 'p1';
+      const oppShips = myRole === 'p1' ? latestRoom.p2_ships : latestRoom.p1_ships;
+      const newShots = [...myShots, [x, y]];
+      const allSunk  = oppShips && oppShips.every(s => sunk(s, newShots));
+
+      myTurn = false;
+      const upd = { shots: { ...latestRoom.shots, [myRole]: newShots }, turn: opp };
+      if (allSunk) { upd.phase = 'done'; upd.winner = myRole; }
+      await db.from('rooms').update(upd).eq('id', roomId);
+    }
+
+    // ── Game over ────────────────────────────────────────────
+    function showGameOver(winner) {
+      const win = winner === myRole;
+      const el  = document.getElementById('go-result');
+      el.textContent  = win ? '🏆 VICTOIRE !' : '💀 DÉFAITE…';
+      el.style.color  = win ? '#4ade80' : '#f87171';
+      document.getElementById('go-msg').textContent = win
+        ? 'Tu as coulé tous les navires !'
+        : 'Tous tes navires ont été coulés.';
+      showScreen('gameover');
+    }
+
+    function showErr(msg) {
+      const el = document.getElementById('lobby-err');
+      el.textContent    = msg;
+      el.style.display  = 'block';
+      setTimeout(() => { el.style.display = 'none'; }, 3500);
+    }
+
+    // ── Event listeners ──────────────────────────────────────
+    document.getElementById('btn-create').addEventListener('click', createRoom);
+
+    document.getElementById('btn-join').addEventListener('click', () =>
+      joinRoom(document.getElementById('room-input').value));
+    document.getElementById('room-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') joinRoom(e.target.value);
+    });
+
+    document.getElementById('btn-copy').addEventListener('click', () => {
+      navigator.clipboard.writeText(document.getElementById('share-url').textContent);
+      const b = document.getElementById('btn-copy');
+      b.textContent = '✓ Copié';
+      setTimeout(() => { b.textContent = 'Copier'; }, 2000);
+    });
+
+    document.getElementById('btn-rotate').addEventListener('click', () => {
+      horizontal = !horizontal; renderPlacement();
+    });
+    document.getElementById('btn-undo').addEventListener('click', () => {
+      if (!myShips.length || confirmed) return;
+      myShips.pop(); pendingIdx--;
+      document.getElementById('btn-confirm').disabled = true;
+      updateShipsList(); renderPlacement();
+    });
+    document.getElementById('btn-confirm').addEventListener('click', confirmPlacement);
+
+    document.getElementById('btn-replay').addEventListener('click', () => {
+      if (roomCh) { db.removeChannel(roomCh); roomCh = null; }
+      myRole = roomId = latestRoom = null;
+      myShips = []; pendingIdx = 0; confirmed = false; myTurn = false;
+      showScreen('lobby');
+    });
+
+    // Placement canvas
+    const placeC = document.getElementById('place-canvas');
+    placeC.addEventListener('mousemove', e => {
+      const r = placeC.getBoundingClientRect();
+      hover = px2cell(e.clientX - r.left, e.clientY - r.top);
+      renderPlacement();
+    });
+    placeC.addEventListener('mouseleave', () => { hover = null; renderPlacement(); });
+    placeC.addEventListener('click', e => {
+      const r = placeC.getBoundingClientRect();
+      const c = px2cell(e.clientX - r.left, e.clientY - r.top);
+      if (c) placeShip(c.x, c.y);
+    });
+    placeC.addEventListener('contextmenu', e => {
+      e.preventDefault(); horizontal = !horizontal; renderPlacement();
+    });
+
+    // Enemy canvas
+    const enemyC = document.getElementById('enemy-canvas');
+    enemyC.addEventListener('click', e => {
+      const r = enemyC.getBoundingClientRect();
+      const c = px2cell(e.clientX - r.left, e.clientY - r.top);
+      if (c) shoot(c.x, c.y);
+    });
+    enemyC.addEventListener('mousemove', e => {
+      if (phase !== 'battle') return;
+      const r = enemyC.getBoundingClientRect();
+      hover = px2cell(e.clientX - r.left, e.clientY - r.top);
+      renderBattle();
+    });
+    enemyC.addEventListener('mouseleave', () => {
+      hover = null;
+      if (phase === 'battle') renderBattle();
+    });
+
+    // Keyboard
+    document.addEventListener('keydown', e => {
+      if ((e.key === 'r' || e.key === 'R') && phase === 'placement') {
+        horizontal = !horizontal; renderPlacement();
+      }
+    });
+
+    // ── Auto-join from URL ────────────────────────────────────
+    const urlRoom = new URLSearchParams(window.location.search).get('room');
+    if (urlRoom) joinRoom(urlRoom);
+  </script>
+</body>
+</html>

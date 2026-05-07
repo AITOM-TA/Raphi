@@ -18,6 +18,11 @@ def tetris():
     return render_template("tetris.html")
 
 
+@app.route("/battleship")
+def battleship():
+    return render_template("battleship.html")
+
+
 if __name__ == "__main__":
     import os
     port = int(os.environ.get("PORT", 5000))
